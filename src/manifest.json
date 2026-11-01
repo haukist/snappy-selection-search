@@ -28,7 +28,7 @@
 		"open_in_tab": true
 	},
 
-	"permissions": ["<all_urls>", "clipboardWrite", "contextMenus", "search", "storage", "webNavigation", "webRequest", "webRequestBlocking"],
+	"permissions": ["<all_urls>", "clipboardWrite", "contextMenus", "search", "storage", "webNavigation"],
 	"optional_permissions": ["downloads", "tabs"],
 
 	"commands": {
@@ -42,5 +42,5 @@
 		}
 	},
 
-	"web_accessible_resources": ["res/*"]
+	"web_accessible_resources": ["res/*", "content-scripts/popup.css"]
 }

@@ -388,6 +388,14 @@ namespace ContentScript
 
 		const popup = document.createElement("sss-popup") as PopupCreator.SSSPopup;
 
+		popup.onStylesLoaded = () => {
+			if (!popup.isShown()) return;
+			if (!selection.isInInputField && selection.selection.rangeCount === 0) {
+				popup.hide();
+				return;
+			}
+			popup.setPopupPosition(settings, selection, mousePositionX, mousePositionY);
+		};
 		document.documentElement.appendChild(popup);
 
 		// register popup events
@@ -670,6 +678,13 @@ namespace PopupCreator
 		content: HTMLDivElement;
 		inputField: HTMLInputElement;
 		enginesContainer: HTMLDivElement;
+		private popupStyle: HTMLLinkElement;
+		onStylesLoaded: () => void = () => {};
+		private popupCSS: string;
+		private customPopupCSS: string;
+		private stylesFailed = false;
+		private appliedSheet: CSSStyleSheet | null = null;
+		private focusInputAfterStyles = false;
 
 		constructor(settings: SSS.Settings, sssIcons: { [id: string] : SSS.SSSIconDefinition; })
 		{
@@ -679,13 +694,14 @@ namespace PopupCreator
 
 			const shadowRoot = this.attachShadow({mode: "closed"});
 
-			const css = this.generateStylesheet(settings);
-			var style = document.createElement("style");
-			style.appendChild(document.createTextNode(css));
-			shadowRoot.appendChild(style);
+			this.popupCSS = this.generateStylesheet(settings);
+			this.customPopupCSS = settings.useCustomPopupCSS ? settings.customPopupCSS : "";
+			this.popupStyle = this.createStylesheetLink();
+			shadowRoot.appendChild(this.popupStyle);
 
 			// create popup parent (will contain all icons)
 			this.content = document.createElement("div");
+			this.content.style.setProperty("visibility", "hidden");
 			this.content.classList.add("sss-content");
 			shadowRoot.appendChild(this.content);
 
@@ -710,6 +726,55 @@ namespace PopupCreator
 			}
 
 			this.createPopupContent(settings, sssIcons);
+		}
+
+		private createStylesheetLink(): HTMLLinkElement
+		{
+			const style = document.createElement("link");
+			style.rel = "stylesheet";
+			style.href = browser.runtime.getURL("/content-scripts/popup.css");
+			style.addEventListener("load", () => {
+				try {
+					this.applyStylesheet();
+					this.onStylesLoaded();
+				} catch (error) {
+					this.stylesFailed = true;
+					this.hide();
+					console.error("SSS: Could not apply popup styles", error);
+				} finally {
+					this.content.style.removeProperty("visibility");
+					if (this.focusInputAfterStyles) {
+						this.focusInputAfterStyles = false;
+						this.setFocusOnInputFieldText();
+					}
+				}
+			});
+			style.addEventListener("error", () => {
+				this.stylesFailed = true;
+				this.hide();
+				console.error("SSS: Could not load popup stylesheet");
+			});
+			return style;
+		}
+
+		private applyStylesheet()
+		{
+			// An extension resource loads without relaxing the page's CSP. Populate
+			// its sheet through CSSOM; each grouping rule can contain multiple rules.
+			const sheet = this.popupStyle.sheet as CSSStyleSheet;
+			if (!sheet) throw new Error("Popup stylesheet is unavailable");
+			if (sheet === this.appliedSheet) return;
+
+			sheet.insertRule(`@media all { ${this.popupCSS} }`, sheet.cssRules.length);
+			this.appliedSheet = sheet;
+			if (this.customPopupCSS) {
+				try {
+					sheet.insertRule(`@media all { ${this.customPopupCSS} }`, sheet.cssRules.length);
+				} catch (error) {
+					// Invalid custom CSS must not prevent the default popup styles.
+					console.error("SSS: Could not apply custom popup CSS", error);
+				}
+			}
 		}
 
 		generateStylesheet(settings: SSS.Settings)
@@ -770,8 +835,6 @@ namespace PopupCreator
 				.sss-input-field:hover {
 					border: 1px solid ${settings.popupHighlightColor};
 				}
-
-				${settings.useCustomPopupCSS === true ? settings.customPopupCSS : ""}
 			`;
 		}
 
@@ -1002,6 +1065,11 @@ namespace PopupCreator
 
 		setFocusOnInputFieldText()
 		{
+			if (!this.isShown()) return;
+			if (this.content.style.visibility === "hidden") {
+				this.focusInputAfterStyles = true;
+				return;
+			}
 			this.inputField.focus();
 		}
 
@@ -1022,11 +1090,13 @@ namespace PopupCreator
 
 		show()
 		{
+			if (this.stylesFailed) return;
 			this.content.style.setProperty("display", "inline-block");
 		}
 
 		hide()
 		{
+			this.focusInputAfterStyles = false;
 			this.content.style.setProperty("display", "none");
 		}
 	}

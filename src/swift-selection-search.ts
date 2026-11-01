@@ -1019,11 +1019,6 @@ namespace SSS
 			browser.webNavigation.onDOMContentLoaded.addListener(onDOMContentLoaded);
 			browser.tabs.query({}).then(installOnOpenTabs, getErrorHandler("Error querying tabs."));
 		}
-
-		if (browser.webRequest)
-		{
-			registerCSPModification();
-		}
 	}
 
 	function onDOMContentLoaded(details)
@@ -1085,45 +1080,6 @@ namespace SSS
 		} else {
 			injectPageScript();	// (2) own call
 		}
-	}
-
-	/* ------------------------------------ */
-	/* ------- HEADER MODIFICATION -------- */
-	/* ------------------------------------ */
-
-	// Some pages have a restrictive CSP that blocks things, but extensions can modify the CSP to allow their own modifications
-	// (as long as they have the needed permissions). In particular, SSS needs to use inline style blocks.
-	function registerCSPModification()
-	{
-		browser.webRequest.onHeadersReceived.removeListener(modifyCSPRequest);
-
-		if (DEBUG) { log("registering with onHeadersReceived"); }
-
-		browser.webRequest.onHeadersReceived.addListener(
-			modifyCSPRequest,
-			{ urls : [ "http://*/*", "https://*/*" ], types: [ "main_frame" ] },
-			[ "blocking", "responseHeaders" ]
-		);
-	}
-
-	function modifyCSPRequest(details)
-	{
-		for (const responseHeader of details.responseHeaders)
-		{
-			const headerName = responseHeader.name.toLowerCase();
-			if (headerName !== "content-security-policy" && headerName !== "x-webkit-csp") continue;
-
-			const CSP_SOURCE = "style-src ";	// the trailing space is important, otherwise we also match things like "style-src-attr" or "style-src-elem"
-
-			if (responseHeader.value.includes(CSP_SOURCE))
-			{
-				if (DEBUG) { log("CSP is: " + responseHeader.value); }
-				responseHeader.value = responseHeader.value.replace(CSP_SOURCE, CSP_SOURCE + "'unsafe-inline' ");
-				if (DEBUG) { log("modified CSP to include style-src 'unsafe-inline': " + responseHeader.value); }
-			}
-		}
-
-		return details;
 	}
 
 	/* ------------------------------------ */
