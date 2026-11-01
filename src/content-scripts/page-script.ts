@@ -212,6 +212,9 @@ namespace ContentScript
 
 	function onSelectionChange(ev: selectionchange.CustomSelectionChangeEvent)
 	{
+		// The notification is synthetic; only consume ones created from trusted input.
+		if (!selectionchange.consumeUserSelectionChange(ev)) return;
+
 		if (popup && popup.isReceiverOfEvent(ev.event)) return;
 
 		if (activationSettings.popupOpenBehaviour === SSS.PopupOpenBehaviour.Auto && activationSettings.popupDelay > 0)
@@ -450,8 +453,10 @@ namespace ContentScript
 		return settings.searchEngines.find(e => e.shortcut === key);
 	}
 
-	function onKeyDown(ev)
+	function onKeyDown(ev: KeyboardEvent & { originalTarget: Element })
 	{
+		if (!ev.isTrusted) return;
+
 		// Check if the user pressed a shortcut.
 		// The popup must be visible, unless 'Always enable shortcuts' is checked.
 
@@ -525,13 +530,15 @@ namespace ContentScript
 		}
 	}
 
-	function maybeHidePopup(ev?)
+	function maybeHidePopup(ev?: Event)
 	{
+		if (ev && !ev.isTrusted) return;
+
 		if (popup === null) return;
 
 		if (ev)
 		{
-			if (ev.type === "keydown")
+			if (ev instanceof KeyboardEvent)
 			{
 				// these keys shouldn't hide the popup
 				if (ev.keyCode == 16) return;	// shift
@@ -554,7 +561,7 @@ namespace ContentScript
 			}
 
 			// if we pressed with right mouse button and that isn't supposed to hide the popup, don't hide
-			if (ev.button === 2 && settings && settings.hidePopupOnRightClick === false) return;
+			if (ev instanceof MouseEvent && ev.button === 2 && settings && settings.hidePopupOnRightClick === false) return;
 		}
 
 		popup.hide();
@@ -568,6 +575,8 @@ namespace ContentScript
 
 	function onSearchEngineClick(ev: MouseEvent, engine: SSS.SearchEngine, settings: SSS.Settings)
 	{
+		if (!ev.isTrusted) return;
+
 		// if using middle mouse and can't, early out so we don't hide popup
 		if (ev.button === 1 && !canMiddleClickEngine) return;
 
@@ -612,6 +621,8 @@ namespace ContentScript
 
 	function onMouseDown(ev: MouseEvent)
 	{
+		if (!ev.isTrusted) return;
+
 		if (ev.button !== 1) return;
 
 		const selection: Selection = window.getSelection();
@@ -638,6 +649,8 @@ namespace ContentScript
 
 	function onMouseUp(ev: MouseEvent)
 	{
+		if (!ev.isTrusted) return;
+
 		if (ev.button === 1) {
 			// return value to normal to allow clicking engines again with middle mouse
 			canMiddleClickEngine = true;
