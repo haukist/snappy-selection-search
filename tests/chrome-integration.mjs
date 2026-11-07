@@ -202,6 +202,90 @@ try {
     await search(settings.searchEngines[0], 'opening', openingBehaviour);
   }
   record('all seven result-opening modes create or update real tabs/windows');
+  const layoutSettings = structuredClone(data.defaultSettings);
+  layoutSettings.popupDelay = 0;
+  layoutSettings.popupAnimationDuration = 0;
+  const applyLayout = async value => {
+    await options.evaluate(settings => browser.storage.local.set(settings), value);
+    await send('getPopupSettings');
+    await existing.goto(origin + '/layout');
+    await existing.bringToFront();
+    await select(existing);
+  };
+  const popupMetrics = () => options.evaluate(async tabId => (await chrome.scripting.executeScript({
+    target: { tabId, frameIds: [0] },
+    func: () => {
+      const popup = document.querySelector('sss-popup');
+      const style = getComputedStyle(popup.content);
+      const inputStyle = getComputedStyle(popup.inputField);
+      const bounds = popup.content.getBoundingClientRect();
+      const icons = Array.from(popup.enginesContainer.children);
+      return {
+        background: style.backgroundColor, text: style.color,
+        inputBackground: inputStyle.backgroundColor, inputText: inputStyle.color,
+        actionFilter: getComputedStyle(icons[0]).filter,
+        brandFilter: getComputedStyle(icons.find(icon => !icon.classList.contains('sss-action-icon'))).filter,
+        rows: new Set(icons.map(icon => Math.round(icon.getBoundingClientRect().top))).size,
+        left: bounds.left, right: bounds.right, top: bounds.top, width: bounds.width, height: bounds.height,
+        viewport: document.documentElement.clientWidth,
+      };
+    },
+  }))[0].result, fixtureTab);
+  const brightness = color => {
+    const components = color.match(/[\d.]+/g);
+    assert(components && components.length >= 3, `Expected a resolved RGB color: ${color}`);
+    const channels = components.map(Number);
+    return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+  };
+  await existing.emulateMedia({ colorScheme: 'dark' });
+  await applyLayout(layoutSettings);
+  let metrics = await popupMetrics();
+  assert(brightness(metrics.background) < 70 && brightness(metrics.inputBackground) < 90);
+  assert(brightness(metrics.text) > 200 && brightness(metrics.inputText) > 200);
+  assert.equal(metrics.actionFilter, 'invert(1)');
+  assert.equal(metrics.brandFilter, 'none');
+  assert.equal(metrics.rows, 1, 'All default engines, including Google Translate, must fit one row');
+  await existing.screenshot({ path: path.join(results, 'popup-dark.png'), clip: { x: 0, y: 0, width: Math.ceil(metrics.right + 10), height: Math.ceil(metrics.top + metrics.height + 15) } });
+  record('default popup, input and action icons are dark; all default engines fit one row');
+  await existing.emulateMedia({ colorScheme: 'light' });
+  for (let attempt = 0; attempt < 100; attempt++) {
+    metrics = await popupMetrics();
+    if (brightness(metrics.background) > 230) break;
+    await delay(50);
+  }
+  assert(brightness(metrics.background) > 230 && brightness(metrics.inputBackground) > 230);
+  assert(brightness(metrics.inputText) < 60);
+  assert.equal(metrics.actionFilter, 'none');
+  assert.equal(metrics.rows, 1);
+  await existing.screenshot({ path: path.join(results, 'popup-light.png'), clip: { x: 0, y: 0, width: Math.ceil(metrics.right + 10), height: Math.ceil(metrics.top + metrics.height + 15) } });
+  record('an open popup follows a system theme change back to light');
+  await existing.emulateMedia({ colorScheme: 'dark' });
+  for (const background of ['white', '#ffffffff', 'rgb(255, 255, 255)', null]) {
+    await applyLayout({ ...layoutSettings, popupBackgroundColor: background });
+    assert(brightness((await popupMetrics()).background) < 70);
+  }
+  record('equivalent default white colors and missing background values use the dark palette');
+  await applyLayout({ ...layoutSettings, popupBackgroundColor: '#123456', popupHighlightColor: '#ff8800' });
+  assert.equal((await popupMetrics()).background, 'rgb(18, 52, 86)');
+  record('explicit custom popup colors are preserved in dark mode');
+  await applyLayout({ ...layoutSettings, useSingleRow: false, nPopupIconsPerRow: 4 });
+  assert((await popupMetrics()).rows > 1);
+  record('explicit multirow layout remains supported');
+  await existing.setViewportSize({ width: 320, height: 640 });
+  const manyEngines = Array.from({ length: 4 }, (_, group) => layoutSettings.searchEngines.map(engine => ({ ...engine, uniqueId: engine.uniqueId + '-' + group }))).flat();
+  await applyLayout({ ...layoutSettings, searchEngines: manyEngines });
+  metrics = await popupMetrics();
+  assert(metrics.rows > 1);
+  assert(metrics.left >= 4 && metrics.right <= metrics.viewport - 4, JSON.stringify(metrics));
+  await existing.screenshot({ path: path.join(results, 'popup-narrow.png') });
+  record('many engines wrap inside a narrow viewport without horizontal overflow');
+  await existing.evaluate(() => { document.body.style.height = '200vh'; });
+  await existing.keyboard.press('Escape');
+  await select(existing);
+  metrics = await popupMetrics();
+  assert(metrics.left >= 4 && metrics.right <= metrics.viewport - 4, JSON.stringify(metrics));
+  assert.equal(await existing.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth), false);
+  record('a vertical scrollbar does not make the popup overflow horizontally');
   assert.deepEqual(pageErrors, []);
   assert.deepEqual(runtimeErrors, []);
   await fs.writeFile(path.join(results, 'chrome.json'), JSON.stringify({ browser: context.browser().version(), extensionId: id, checks, pageErrors, runtimeErrors, workerStopObserved: true }, null, 2));

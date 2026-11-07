@@ -681,6 +681,7 @@ namespace ContentScript
 namespace PopupCreator
 {
 	export let onSearchEngineClick = null;
+	const VIEWPORT_MARGIN = 5;
 
 	// Chrome does not expose a custom-element registry in its isolated content world.
 	// Return a real DOM host from super(), then add our methods to that element.
@@ -798,12 +799,22 @@ namespace PopupCreator
 			// defined afterwards will also need to use !important.
 			// Inherited properties: https://stackoverflow.com/a/5612360/2162837
 
+			const background = settings.popupBackgroundColor?.trim() || "#FFFFFF";
+			const color = document.createElement("span").style;
+			color.backgroundColor = background;
+			const useDefaultBackground = color.backgroundColor === "white" || color.backgroundColor === "rgb(255, 255, 255)";
 			return `
 				:host {
 					all: initial !important;
 				}
 
 				.sss-content {
+					color-scheme: light;
+					--sss-background: ${background};
+					--sss-text: #202124;
+					--sss-input-background: #ffffff;
+					--sss-input-border: #cccccc;
+					--sss-action-filter: none;
 					font-size: 0px !important;
 					direction: ltr !important;
 					position: absolute;
@@ -811,7 +822,8 @@ namespace PopupCreator
 					user-select: none;
 					-moz-user-select: none;
 					box-shadow: rgba(0, 0, 0, 0.5) 0px 0px 3px;
-					background-color: ${settings.popupBackgroundColor};
+					background-color: var(--sss-background);
+					color: var(--sss-text);
 					border-radius: ${settings.popupBorderRadius}px;
 					padding: ${settings.popupPaddingY}px ${settings.popupPaddingX}px;
 					text-align: center;
@@ -830,6 +842,10 @@ namespace PopupCreator
 					${this.generateStylesheet_IconHover(settings)}
 				}
 
+				.sss-action-icon {
+					filter: var(--sss-action-filter);
+				}
+
 				.separator {
 					${this.generateStylesheet_Separator(settings)}
 				}
@@ -841,15 +857,29 @@ namespace PopupCreator
 				.sss-input-field {
 					box-sizing: border-box;
 					width: calc(100% - 8px);
-					border: 1px solid #ccc;
+					border: 1px solid var(--sss-input-border);
+					background-color: var(--sss-input-background);
+					color: var(--sss-text);
+					caret-color: var(--sss-text);
 					border-radius: ${settings.popupBorderRadius}px;
 					padding: 4px 7px;
 					margin: 4px 0px 2px 0px;
 				}
 
-				.sss-input-field:hover {
+				.sss-input-field:hover, .sss-input-field:focus {
 					border: 1px solid ${settings.popupHighlightColor};
 				}
+
+				${useDefaultBackground ? `@media (prefers-color-scheme: dark) {
+					.sss-content {
+						color-scheme: dark;
+						--sss-background: #25272b;
+						--sss-text: #f1f3f4;
+						--sss-input-background: #35383d;
+						--sss-input-border: #60656d;
+						--sss-action-filter: invert(1);
+					}
+				}` : ""}
 			`;
 		}
 
@@ -887,7 +917,8 @@ namespace PopupCreator
 				width = nPopupIconsPerRow * (settings.popupItemSize + 2 * settings.popupItemPadding);
 			}
 
-			return `width: ${width}px;`;
+			// Fractional separator margins can round up beyond the calculated row width.
+			return `width: ${Math.ceil(width) + 1}px; max-width: calc(var(--sss-viewport-width, 100vw) - ${2 * (VIEWPORT_MARGIN + settings.popupPaddingX)}px);`;
 		}
 
 		generateStylesheet_IconHover(settings: SSS.Settings): string
@@ -951,6 +982,7 @@ namespace PopupCreator
 					const iconImgSource = browser.runtime.getURL(sssIcon.iconPath);
 					const isInteractive = sssIcon.isInteractive !== false;	// undefined or true means it's interactive
 					icon = this.setupEngineIcon(sssEngine, iconImgSource, sssIcon.name, isInteractive, settings);
+					icon.classList.add("sss-action-icon");
 
 					if (sssEngine.id === "separator") {
 						icon.classList.add("separator");
@@ -1003,6 +1035,9 @@ namespace PopupCreator
 
 		setPopupPosition(settings: SSS.Settings, selection: ContentScript.SelectionData, mousePositionX: number, mousePositionY: number)
 		{
+			// clientWidth excludes a vertical scrollbar, unlike CSS viewport units.
+			const viewportWidth = document.documentElement.clientWidth;
+			this.content.style.setProperty("--sss-viewport-width", viewportWidth + "px");
 			const bounds = this.content.getBoundingClientRect();
 			const width = bounds.width;
 			const height = bounds.height;
@@ -1040,13 +1075,13 @@ namespace PopupCreator
 
 			// don't const popup be outside of the viewport
 
-			const margin: number = 5;
+			const margin: number = VIEWPORT_MARGIN;
 
 			// left/right checks
 			if (positionLeft < margin + window.scrollX) {
 				positionLeft = margin + window.scrollX;
 			} else {
-				const clientWidth = Math.max(document.body.clientWidth, document.documentElement.clientWidth);
+				const clientWidth = viewportWidth;
 				if (positionLeft + width + margin > clientWidth + window.scrollX) {
 					positionLeft = clientWidth + window.scrollX - width - margin;
 				}

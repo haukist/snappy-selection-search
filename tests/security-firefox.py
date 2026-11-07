@@ -7,6 +7,7 @@ never sent externally. Firefox uses a disposable profile and a loopback fixture.
 """
 import argparse
 import json
+import re
 from pathlib import Path
 import tempfile
 import threading
@@ -53,6 +54,11 @@ settings.popupOpenBehaviour = params.get('mode') || 'auto';
 settings.showSelectionTextField = params.has('focus');
 settings.useEngineShortcutWithoutPopup = params.get('always') !== 'false';
 settings.useCustomPopupCSS = true;
+if (params.has('theme')) {
+    settings.useCustomPopupCSS = false;
+    settings.showSelectionTextField = true;
+    settings.searchEngines = Array.from({length:Number(params.get('engines') || 11)}, (_, index) => ({...settings.searchEngines[0], name:'Engine ' + index}));
+}
 settings.customPopupCSS = params.has('invalid') ? '} } invalid' :
     '@media all { .sss-content { background-color: rgb(12, 34, 56); } }' +
     '@supports (display: grid) { .sss-content { border-top: 3px solid black; } }' +
@@ -88,6 +94,11 @@ setInterval(() => {
         const style = getComputedStyle(popup.content);
         const icon = popup.enginesContainer.firstChild.getBoundingClientRect();
         Object.assign(state, {shown:popup.isShown(), background:style.backgroundColor,
+            text:style.color, inputBackground:popup.inputField && getComputedStyle(popup.inputField).backgroundColor,
+            inputText:popup.inputField && getComputedStyle(popup.inputField).color,
+            rows:new Set(Array.from(popup.enginesContainer.children, icon => Math.round(icon.getBoundingClientRect().top))).size,
+            left:popup.content.getBoundingClientRect().left, right:popup.content.getBoundingClientRect().right,
+            viewport:innerWidth, prefersDark:matchMedia('(prefers-color-scheme: dark)').matches,
             focused:!!popup.inputField && popup.inputField.matches(':focus'),
             customRules: Array.from(popup.popupStyle.sheet?.cssRules || []).flatMap(
                 group => Array.from(group.cssRules || []).map(rule => rule.type)),
@@ -184,7 +195,8 @@ def test_mode(driver, url, mode, always=True, invalid=False):
     s = wait_for(driver, lambda s: s.get('shown') and s.get('visibility') == 'visible' and s.get('width') == 24)
     assert s['copies'] >= 1, s
     assert s['position'] == 'absolute', s
-    assert s['background'] == ('rgb(255, 255, 255)' if invalid else 'rgb(12, 34, 56)'), s
+    default_background = 'rgb(37, 39, 43)' if s['prefersDark'] else 'rgb(255, 255, 255)'
+    assert s['background'] == (default_background if invalid else 'rgb(12, 34, 56)'), s
     if not invalid:
         assert {5, 7, 12} <= set(s['customRules']), s  # font-face, keyframes, supports
     baseline = s['searches']
@@ -219,6 +231,34 @@ def test_forced_focus(driver, url):
     print("PASS: initial forced popup focuses its text input after stylesheet load")
 
 
+def test_theme_layout(driver, url, dark):
+    def brightness(color):
+        red, green, blue = map(float, re.findall(r'[\d.]+', color)[:3])
+        return red * .2126 + green * .7152 + blue * .0722
+
+    driver.set_window_size(1000, 700)
+    driver.get(f'{url}/?theme=1&focus=1')
+    synthetic_selection(driver)
+    driver.execute_script("document.body.dataset.command='force'; document.dispatchEvent(new Event('sss-test-command'))")
+    value = wait_for(driver, lambda s: s.get('shown') and s.get('visibility') == 'visible')
+    assert value['prefersDark'] == dark
+    assert value['rows'] == 1
+    if dark:
+        assert brightness(value['background']) < 70 and brightness(value['inputBackground']) < 90
+        assert brightness(value['inputText']) > 200
+    else:
+        assert brightness(value['background']) > 230 and brightness(value['inputBackground']) > 230
+        assert brightness(value['inputText']) < 60
+    driver.set_window_size(360, 700)
+    driver.get(f'{url}/?theme=1&focus=1&engines=48')
+    synthetic_selection(driver)
+    driver.execute_script("document.body.dataset.command='force'; document.dispatchEvent(new Event('sss-test-command'))")
+    value = wait_for(driver, lambda s: s.get('shown') and s.get('visibility') == 'visible')
+    assert value['rows'] > 1
+    assert value['left'] >= 4 and value['right'] <= value['viewport'] - 4
+    print(f'PASS: Firefox {"dark" if dark else "light"} popup/input palette, single row and viewport-safe wrapping')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--firefox', help='Firefox binary path')
@@ -246,6 +286,12 @@ def main():
                                               ('auto', True, True)]:
                     test_mode(driver, url, mode, always, invalid)
                 test_forced_focus(driver, url)
+            for dark in [False, True]:
+                options.set_preference('ui.systemUsesDarkTheme', int(dark))
+                options.set_preference('layout.css.prefers-color-scheme.content-override', 2)
+                with webdriver.Firefox(options=options, service=Service(args.geckodriver) if args.geckodriver else Service()) as driver:
+                    driver.install_addon(str(addon), temporary=True)
+                    test_theme_layout(driver, url, dark)
     finally:
         server.shutdown()
         server.server_close()
