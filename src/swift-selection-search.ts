@@ -462,11 +462,11 @@ namespace SSS
 
 	// Register wake-up listeners synchronously, before loading any settings.
 	let ready: Promise<void>;
-	const afterReady = (action: () => any) => ready.then(action).catch(getErrorHandler("Background operation failed."));
+	const afterReady = (action: () => any) => waitForReady().then(action).catch(getErrorHandler("Background operation failed."));
 	browser.runtime.onMessage.addListener((msg, sender, respond) => {
 		if (!msg || msg.target === "offscreen") return;
 		if (["getPopupSettings", "engineClick", "log", "getDataForSettingsPage", "runBackwardsCompatibilityUpdates", "generateUniqueEngineId"].indexOf(msg.type) < 0) return;
-		ready.then(() => onContentScriptMessage(msg, sender, respond)).catch(error => {
+		waitForReady().then(() => onContentScriptMessage(msg, sender, respond)).catch(error => {
 			console.warn("Message failed", error);
 			respond({ error: String(error) });
 		});
@@ -481,11 +481,22 @@ namespace SSS
 		if (sss.settings.popupOpenBehaviour !== PopupOpenBehaviour.Off || sss.settings.useEngineShortcutWithoutPopup) return onDOMContentLoaded(details);
 	}));
 	browser.runtime.onStartup.addListener(() => afterReady(() => setup_Popup()));
-	ready = (async () => {
+	ready = initializeBackground();
+	ready.catch(getErrorHandler("Error loading settings."));
+
+	async function initializeBackground(): Promise<void> {
 		browserVersion = await BrowserCompat.version();
 		await onSettingsAcquired(await browser.storage.local.get() as Settings);
-	})();
-	ready.catch(getErrorHandler("Error loading settings."));
+	}
+
+	function waitForReady(): Promise<void> {
+		const observed = ready;
+		return observed.catch(() => {
+			// Share one retry across concurrent wake-up events after a transient failure.
+			if (ready === observed) ready = initializeBackground();
+			return ready;
+		});
+	}
 
 	/* ------------------------------------ */
 	/* -------------- SETUP --------------- */
@@ -734,7 +745,7 @@ namespace SSS
 		if (DEBUG) { log("onSettingsChanged in " + area); }
 		if (DEBUG) { log(changes); }
 
-		ready = ready.then(async () => {
+		ready = ready.catch(() => {}).then(async () => {
 			await onSettingsAcquired(await browser.storage.local.get() as Settings);
 			await updateSettingsOnAllTabs();
 		});

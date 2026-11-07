@@ -449,7 +449,9 @@ namespace ContentScript
 	function onKeyDown(ev: KeyboardEvent & { originalTarget: Element })
 	{
 		if (!ev.isTrusted) return;
-		const eventTarget = ev.originalTarget || (popup && popup.isReceiverOfEvent(ev) && popup.getFocusedElement()) || ev.composedPath()[0] as Element;
+		const rawTarget = ev.originalTarget || (popup && popup.isReceiverOfEvent(ev) && popup.getFocusedElement()) || ev.composedPath()[0];
+		const eventTarget = rawTarget instanceof Element ? rawTarget : rawTarget instanceof Node ? rawTarget.parentElement : null;
+		if (!eventTarget) return;
 
 		// Check if the user pressed a shortcut.
 		// The popup must be visible, unless 'Always enable shortcuts' is checked.
@@ -459,7 +461,7 @@ namespace ContentScript
 		if (!ev.altKey && !ev.ctrlKey && !ev.metaKey && !ev.shiftKey	// modifiers are not supported right now
 			&& !isAnyEditableFieldFocused())							// shortcuts are disabled in editable fields
 		{
-			if ((isPopupVisible && eventTarget.className !== "sss-input-field")
+			if ((isPopupVisible && !eventTarget.classList.contains("sss-input-field"))
 				|| (activationSettings.useEngineShortcutWithoutPopup && saveCurrentSelection()))	// if outside popup, ensure a selection exists, otherwise we crash later
 			{
 				if (settings !== null) {

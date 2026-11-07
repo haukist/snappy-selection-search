@@ -5,6 +5,8 @@ browser.runtime.onMessage.addListener((message, sender, respond) => {
     document.body.appendChild(textarea);
     textarea.select();
     try {
+        // Chrome's offscreen clipboard sample uses execCommand; the response is synchronous.
+        // https://github.com/GoogleChrome/chrome-extensions-samples/tree/main/functional-samples/cookbook.offscreen-clipboard-write
         if (!document.execCommand("copy")) throw new Error("Clipboard copy was denied");
         respond({ ok: true });
     } catch (error) {

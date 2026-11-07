@@ -11,7 +11,9 @@ search engines. Browser profiles and unpacked test copies are removed after a ru
   ready, concurrent settings requests, settings/menu update serialization, worker
   recreation, URL substitutions, Shift JIS encoding, preservation/exclusion of
   Firefox-only engines, cyclic/missing group references, empty searches/groups,
-  context-menu dispatch, and denied injection.
+  context-menu dispatch, denied injection, recovery after failed initial/updated
+  settings reads, clipboard document ownership, queue recovery and immutable menu
+  arguments.
 - Both browser builds type-check the project and emit TypeScript with const enums
   resolved across files. Chrome packaging checks and loads the extracted ZIP.
 - `npm run test:chrome`: real options startup, imported-engine labels, custom and

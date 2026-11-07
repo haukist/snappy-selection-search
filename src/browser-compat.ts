@@ -26,9 +26,10 @@ namespace BrowserCompat {
 	}
 
 	export function createMenu(properties: Parameters<typeof browser.contextMenus.create>[0]): Promise<void> {
-		if (isChrome) delete properties.icons;
+		const options = { ...properties };
+		if (isChrome) delete options.icons;
 		return new Promise((resolve, reject) => {
-			browser.contextMenus.create(properties, () => {
+			browser.contextMenus.create(options, () => {
 				const error = browser.runtime.lastError;
 				if (error) reject(new Error(error.message));
 				else resolve();
@@ -43,14 +44,15 @@ namespace BrowserCompat {
 			const api = (globalThis as any).chrome;
 			const url = browser.runtime.getURL("offscreen.html");
 			const contexts = await api.runtime.getContexts({ contextTypes: ["OFFSCREEN_DOCUMENT"], documentUrls: [url] });
-			if (!contexts.length) await api.offscreen.createDocument({
+			const createdDocument = contexts.length === 0;
+			if (createdDocument) await api.offscreen.createDocument({
 				url: "offscreen.html", reasons: ["CLIPBOARD"], justification: "Copy a search selection or link text."
 			});
 			try {
 				const response = await browser.runtime.sendMessage({ target: "offscreen", type: "copyText", text });
 				if (!response || !response.ok) throw new Error(response && response.error || "Clipboard copy failed");
 			} finally {
-				await api.offscreen.closeDocument();
+				if (createdDocument) await api.offscreen.closeDocument();
 			}
 		});
 		clipboardQueue = operation.catch(() => {});

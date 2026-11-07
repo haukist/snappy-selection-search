@@ -134,3 +134,53 @@ test('denied script injection is contained and does not break subsequent setting
   await bg.browser.webNavigation.onDOMContentLoaded.listeners[0]({ tabId: 1, frameId: 0 });
   assert((await bg.message('getPopupSettings')).settings.searchEngines.length > 0);
 });
+
+test('a failed settings refresh recovers on the next message and subsequent writes still run', async () => {
+  const bg = background();
+  const defaults = (await bg.message('getDataForSettingsPage')).defaultSettings;
+  const get = bg.browser.storage.local.get;
+  let fail = true;
+  bg.browser.storage.local.get = async () => {
+    if (fail) { fail = false; throw new Error('Transient storage failure'); }
+    return get();
+  };
+  await bg.browser.storage.local.set({ ...defaults, searchEngines: [custom('recovered')] });
+  const responses = await Promise.all([bg.message('getPopupSettings'), bg.message('getPopupSettings')]);
+  for (const response of responses) assert.equal(response.settings.searchEngines[0].uniqueId, 'recovered');
+  await bg.browser.storage.local.set({ searchEngines: [custom('next')] });
+  assert.equal((await bg.message('getPopupSettings')).settings.searchEngines[0].uniqueId, 'next');
+});
+
+test('a failed first startup can retry without restarting the extension', async () => {
+  const bg = background({}, Promise.reject(new Error('Initial storage failure')));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  bg.browser.storage.local.get = async () => structuredClone(bg.stored());
+  assert((await bg.message('getDataForSettingsPage')).defaultSettings.searchEngines.length > 0);
+  assert((await bg.message('getPopupSettings')).settings.searchEngines.length > 0);
+});
+
+test('clipboard cleanup respects existing document ownership and menu arguments remain intact', async () => {
+  const bg = background();
+  await bg.message('getPopupSettings');
+  const menu = { id: 'owned', title: 'Owned', icons: { '32': 'icon.png' } };
+  await bg.context.BrowserCompat.createMenu(menu);
+  assert.equal(menu.icons['32'], 'icon.png');
+  const api = bg.context.chrome;
+  let existing = true, created = 0, closed = 0;
+  api.runtime = { getContexts: async () => existing ? [{}] : [] };
+  api.offscreen = { createDocument: async () => { created++; }, closeDocument: async () => { closed++; } };
+  bg.browser.runtime.sendMessage = async () => ({ ok: true });
+  await bg.context.BrowserCompat.copyText('existing');
+  assert.equal(created, 0);
+  assert.equal(closed, 0);
+  existing = false;
+  await bg.context.BrowserCompat.copyText('new');
+  assert.equal(created, 1);
+  assert.equal(closed, 1);
+  bg.browser.runtime.sendMessage = async () => { throw new Error('Copy failed'); };
+  await assert.rejects(bg.context.BrowserCompat.copyText('failure'), /Copy failed/);
+  assert.equal(closed, 2);
+  bg.browser.runtime.sendMessage = async () => ({ ok: true });
+  await bg.context.BrowserCompat.copyText('after failure');
+  assert.equal(closed, 3);
+});
