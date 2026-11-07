@@ -71,6 +71,7 @@ namespace ContentScript
 	let settings: SSS.Settings = null;
 	let sssIcons: { [id: string] : SSS.SSSIconDefinition; } = null;
 	let popupShowTimeout: number = null;
+	let activationGeneration = 0;
 
 	setTimeout(() => PopupCreator.onSearchEngineClick = onSearchEngineClick, 0);
 
@@ -182,6 +183,7 @@ namespace ContentScript
 
 	function deactivate()
 	{
+		activationGeneration++;
 		// unregister with all events
 
 		document.removeEventListener("mousemove", onMouseUpdate);
@@ -249,8 +251,10 @@ namespace ContentScript
 
 	function acquireSettings(onSettingsAcquired: () => void)
 	{
+		const generation = activationGeneration;
 		browser.runtime.sendMessage(new GetPopupSettingsMessage()).then(
 			popupSettings => {
+				if (generation !== activationGeneration || !document.defaultView || !popupSettings || !popupSettings.settings) return;
 				settings = popupSettings.settings;
 				sssIcons = popupSettings.sssIcons;
 				onSettingsAcquired();
@@ -378,18 +382,7 @@ namespace ContentScript
 
 	function createPopup(settings: SSS.Settings): PopupCreator.SSSPopup
 	{
-		// only define new element if not already defined (can get here multiple times if settings are reloaded)
-		if (!customElements.get("sss-popup"))
-		{
-			// temp class that locks in settings as arguments to SSSPopup
-			class SSSPopupWithSettings extends PopupCreator.SSSPopup {
-				constructor() { super(getSettings(), getIcons()); }
-			}
-
-			customElements.define("sss-popup", SSSPopupWithSettings);
-		}
-
-		const popup = document.createElement("sss-popup") as PopupCreator.SSSPopup;
+		const popup = new PopupCreator.SSSPopup(settings, sssIcons);
 
 		popup.onStylesLoaded = () => {
 			if (!popup.isShown()) return;
@@ -456,6 +449,7 @@ namespace ContentScript
 	function onKeyDown(ev: KeyboardEvent & { originalTarget: Element })
 	{
 		if (!ev.isTrusted) return;
+		const eventTarget = ev.originalTarget || (popup && popup.isReceiverOfEvent(ev) && popup.getFocusedElement()) || ev.composedPath()[0] as Element;
 
 		// Check if the user pressed a shortcut.
 		// The popup must be visible, unless 'Always enable shortcuts' is checked.
@@ -465,7 +459,7 @@ namespace ContentScript
 		if (!ev.altKey && !ev.ctrlKey && !ev.metaKey && !ev.shiftKey	// modifiers are not supported right now
 			&& !isAnyEditableFieldFocused())							// shortcuts are disabled in editable fields
 		{
-			if ((isPopupVisible && ev.originalTarget.className !== "sss-input-field")				// if using popup, make sure we're not inside the popup's text field
+			if ((isPopupVisible && eventTarget.className !== "sss-input-field")
 				|| (activationSettings.useEngineShortcutWithoutPopup && saveCurrentSelection()))	// if outside popup, ensure a selection exists, otherwise we crash later
 			{
 				if (settings !== null) {
@@ -486,7 +480,7 @@ namespace ContentScript
 			const lastIcon = popup.enginesContainer.lastChild as HTMLImageElement;
 
 			// Focus the first icon for the first time, as well as after the last one so as to keep looping them.
-			if (document.activeElement.nodeName !== "SSS-POPUP" || ev.originalTarget === lastIcon) {
+			if (document.activeElement.nodeName !== "SSS-POPUP" || eventTarget === lastIcon) {
 				firstIcon.focus();
 				ev.preventDefault();
 				return;
@@ -500,12 +494,12 @@ namespace ContentScript
 			let openingBehaviour;
 
 			// if we're inside the popup's text field, grab the first user-defined engine and search using that
-			if (ev.originalTarget.nodeName === "INPUT") {
+			if (eventTarget.nodeName === "INPUT") {
 				engine = settings.searchEngines.find(e => e.type !== SSS.SearchEngineType.SSS);
 				openingBehaviour = SSS.OpenResultBehaviour.NewBgTab;	// for now, using enter is the same as ctrl-clicking
 			} else {
 				// if cycling the icons using "tab", grab the focused icon
-				const engineIndex = [...popup.enginesContainer.children].indexOf(ev.originalTarget);
+				const engineIndex = [...popup.enginesContainer.children].indexOf(eventTarget);
 				engine = settings.searchEngines[engineIndex];
 				openingBehaviour = settings.shortcutBehaviour;
 			}
@@ -686,12 +680,18 @@ namespace PopupCreator
 {
 	export let onSearchEngineClick = null;
 
-	export class SSSPopup extends HTMLElement
+	// Chrome does not expose a custom-element registry in its isolated content world.
+	// Return a real DOM host from super(), then add our methods to that element.
+	const PopupElement = function () { return document.createElement("sss-popup"); } as unknown as typeof HTMLElement;
+	PopupElement.prototype = HTMLElement.prototype;
+
+	export class SSSPopup extends PopupElement
 	{
 		content: HTMLDivElement;
 		inputField: HTMLInputElement;
 		enginesContainer: HTMLDivElement;
 		private popupStyle: HTMLLinkElement;
+		private popupShadowRoot: ShadowRoot;
 		onStylesLoaded: () => void = () => {};
 		private popupCSS: string;
 		private customPopupCSS: string;
@@ -705,7 +705,7 @@ namespace PopupCreator
 
 			Object.setPrototypeOf(this, SSSPopup.prototype);	// needed so that instanceof and casts work
 
-			const shadowRoot = this.attachShadow({mode: "closed"});
+			const shadowRoot = this.popupShadowRoot = this.attachShadow({mode: "closed"});
 
 			this.popupCSS = this.generateStylesheet(settings);
 			this.customPopupCSS = settings.useCustomPopupCSS ? settings.customPopupCSS : "";
@@ -946,7 +946,7 @@ namespace PopupCreator
 					const sssEngine = engine as SSS.SearchEngine_SSS;
 					const sssIcon = sssIcons[sssEngine.id];
 
-					const iconImgSource = browser.extension.getURL(sssIcon.iconPath);
+					const iconImgSource = browser.runtime.getURL(sssIcon.iconPath);
 					const isInteractive = sssIcon.isInteractive !== false;	// undefined or true means it's interactive
 					icon = this.setupEngineIcon(sssEngine, iconImgSource, sssIcon.name, isInteractive, settings);
 
@@ -977,7 +977,7 @@ namespace PopupCreator
 		setupEngineIcon(engine: SSS.SearchEngine, iconImgSource: string, iconTitle: string, isInteractive: boolean, settings: SSS.Settings): HTMLImageElement
 		{
 			const icon: HTMLImageElement = document.createElement("img");
-			icon.src = iconImgSource;
+			if (iconImgSource) icon.src = iconImgSource;
 			icon.tabIndex = 0; // to allow cycling through the icons using "tab"
 
 			// if icon responds to mouse interaction
@@ -1099,6 +1099,11 @@ namespace PopupCreator
 		isShown(): boolean
 		{
 			return this.content.style.display === "inline-block";
+		}
+
+		getFocusedElement(): Element | null
+		{
+			return this.popupShadowRoot.activeElement;
 		}
 
 		show()

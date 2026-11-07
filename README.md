@@ -27,7 +27,73 @@ SSS is available at the Mozilla Add-ons website, here:
 
 https://addons.mozilla.org/firefox/addon/swift-selection-search
 
-## How to build
+## Browser builds (this fork)
+
+Use Node.js 20.11 or newer. From the repository root:
+
+```sh
+npm ci
+npm run build:firefox
+npm run build:chrome
+npm run package:chrome
+```
+
+The builds share TypeScript sources and write only to `dist/firefox` and
+`dist/chrome`. The Chrome package is
+`dist/swift-selection-search-chrome-<version>.zip`, with `manifest.json` at its
+root. Generated JavaScript, dependencies and build output are not committed.
+
+For Chrome, open `chrome://extensions`, enable Developer mode, choose **Load
+unpacked**, and select `dist/chrome` (or the directory extracted from the ZIP).
+Use **Extension options** to configure engines. Reload the extension after
+rebuilding. Test in a separate profile first. Chrome uses Manifest V3 and requires
+Chrome 116 or later; current Windows Chrome Stable is the tested target.
+
+For Firefox, open `about:debugging#/runtime/this-firefox`, choose **Load Temporary
+Add-on**, and select `dist/firefox/manifest.json`. The Firefox build retains
+Manifest V2 and the existing extension ID.
+
+Chrome supports custom URL engines, groups, selection popup, context menu,
+shortcuts and settings backups. Importing Firefox's installed browser engines is
+not supported. Those entries remain in imported/exported settings, are labelled
+unsupported, and are skipped in popup/menu/group searches; add equivalent URL
+engines instead. Settings do not automatically sync between Firefox and Chrome.
+Chrome's context menu does not display per-engine icons. Clipboard work requiring
+a background DOM uses a short-lived offscreen document. Chrome backup downloads
+use an ordinary download link without requesting the downloads permission.
+
+### Verification
+
+```sh
+npm test
+npm run package:chrome
+npm run test:chrome
+```
+
+The Chrome integration test uses the installed Chrome Stable with a disposable
+profile, loads the extracted ZIP, and sends searches only to a local fixture.
+Override its executable with `CHROME_PATH` if necessary. It covers real selection,
+popup clicks, engine shortcuts, strict CSP, frames, clipboard paste, file backups,
+all result-opening modes, and worker stop/restart. The result is recorded in
+`test-results/chrome.json`. Set `SSS_NATIVE_MENU=1` to pause at the native context
+menu for a manual click; this check requires an interactive Windows desktop.
+
+Firefox checks require Python, Selenium and geckodriver:
+
+```sh
+npx tsc
+python tests/security-firefox.py --firefox <firefox.exe> --geckodriver <geckodriver.exe>
+npm run build:firefox
+python tests/firefox-integration.py --firefox <firefox.exe> --geckodriver <geckodriver.exe>
+```
+
+The security harness runs real Firefox DOM/event/CSP code with mocked background
+APIs; the integration smoke test separately loads the actual Firefox build and
+checks background/options startup, popup creation and trusted shortcut search.
+See [validation notes](docs/CHROME_VALIDATION.md) for the checked environment and
+remaining manual checks. Store submission and publication are outside this change.
+
+## Legacy development workflow
 
 Firstly, since WebExtensions are made in JavaScript, we need to be able to convert TypeScript to JavaScript, preferably in a way that is as automatic as possible.
 

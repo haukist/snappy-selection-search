@@ -460,33 +460,39 @@ namespace SSS
 		}
 	});
 
-	// get browser version and then startup
-	browser.runtime.getBrowserInfo().then(browserInfo => {
-		browserVersion = parseInt(browserInfo.version.split(".")[0]);
-		if (DEBUG) { log("Firefox is version " + browserVersion); }
-
-		// Clear all settings (for test purposes only).
-		// Since the mistake from version 3.43.0, "removeToUse" was added to the call
-		// and the add-on submission script (not included in the repository) now
-		// checks for calls to the clear() function.
-
-		// browser.storage.local.cle_removeToUse_ar();
-		// browser.storage.sync.cle_removeToUse_ar();
-
-		// register with content script messages and changes to settings
-		browser.runtime.onMessage.addListener(onContentScriptMessage);
-		browser.storage.onChanged.addListener(onSettingsChanged);
-
-		// Get settings. Setup happens when they are ready.
-		browser.storage.local.get().then(onSettingsAcquired, getErrorHandler("Error getting settings for setup."));
+	// Register wake-up listeners synchronously, before loading any settings.
+	let ready: Promise<void>;
+	const afterReady = (action: () => any) => ready.then(action).catch(getErrorHandler("Background operation failed."));
+	browser.runtime.onMessage.addListener((msg, sender, respond) => {
+		if (!msg || msg.target === "offscreen") return;
+		if (["getPopupSettings", "engineClick", "log", "getDataForSettingsPage", "runBackwardsCompatibilityUpdates", "generateUniqueEngineId"].indexOf(msg.type) < 0) return;
+		ready.then(() => onContentScriptMessage(msg, sender, respond)).catch(error => {
+			console.warn("Message failed", error);
+			respond({ error: String(error) });
+		});
+		return true;
 	});
+	browser.storage.onChanged.addListener(onSettingsChanged);
+	browser.contextMenus.onClicked.addListener((info, tab) => afterReady(() => onContextMenuItemClicked(info, tab)));
+	browser.commands.onCommand.addListener(command => afterReady(() => {
+		if (sss.settings.popupOpenBehaviour !== PopupOpenBehaviour.Off) return onCommand(command);
+	}));
+	browser.webNavigation.onDOMContentLoaded.addListener(details => afterReady(() => {
+		if (sss.settings.popupOpenBehaviour !== PopupOpenBehaviour.Off || sss.settings.useEngineShortcutWithoutPopup) return onDOMContentLoaded(details);
+	}));
+	browser.runtime.onStartup.addListener(() => afterReady(() => setup_Popup()));
+	ready = (async () => {
+		browserVersion = await BrowserCompat.version();
+		await onSettingsAcquired(await browser.storage.local.get() as Settings);
+	})();
+	ready.catch(getErrorHandler("Error loading settings."));
 
 	/* ------------------------------------ */
 	/* -------------- SETUP --------------- */
 	/* ------------------------------------ */
 
 	// Main SSS setup. Called when settings are acquired. Prepares everything.
-	function onSettingsAcquired(settings: Settings)
+	async function onSettingsAcquired(settings: Settings)
 	{
 		let doSaveSettings = false;
 
@@ -500,8 +506,7 @@ namespace SSS
 		}
 
 		if (doSaveSettings) {
-			browser.storage.local.set(settings);
-			return;	// calling "set" will trigger this whole function again, so quit before wasting time
+			await browser.storage.local.set(settings);
 		}
 
 		uniqueIdToEngineDictionary = {};
@@ -519,8 +524,7 @@ namespace SSS
 			if (DEBUG) { log("loading ", settings); }
 		}
 
-		setup_ContextMenu();
-		setup_Commands();
+		await setup_ContextMenu();
 		setup_Popup();
 
 		if (isFirstLoad) {
@@ -547,7 +551,7 @@ namespace SSS
 	{
 		const contentScriptSettings = new ContentScriptSettings();
 		contentScriptSettings.settings = Object.assign({}, settings);	// shallow copy
-		contentScriptSettings.settings.searchEngines = settings.searchEngines.filter(engine => engine.isEnabled);	// pass only enabled engines
+		contentScriptSettings.settings.searchEngines = settings.searchEngines.filter(engine => engine.isEnabled && BrowserCompat.supportsEngine(engine));
 		contentScriptSettings.settings.searchEnginesCache = {};
 		contentScriptSettings.sssIcons = sssIcons;	// add information about special SSS icons (normally not in settings because it doesn't change)
 
@@ -730,27 +734,29 @@ namespace SSS
 		if (DEBUG) { log("onSettingsChanged in " + area); }
 		if (DEBUG) { log(changes); }
 
-		browser.storage.local.get()
-			.then(onSettingsAcquired, getErrorHandler("Error getting settings after onSettingsChanged."))
-			.then(updateSettingsOnAllTabs, getErrorHandler("Error updating settings on all tabs."));
+		ready = ready.then(async () => {
+			await onSettingsAcquired(await browser.storage.local.get() as Settings);
+			await updateSettingsOnAllTabs();
+		});
+		ready.catch(getErrorHandler("Error updating settings."));
 	}
 
 	function updateSettingsOnAllTabs()
 	{
-		browser.tabs.query({}).then(tabs => {
+		return browser.tabs.query({}).then(tabs => {
 			for (const tab of tabs) {
 				activateTab(tab);
 			}
 		}, getErrorHandler("Error querying tabs."));
 	}
 
-	function activateTab(tab: browser.tabs.Tab)
+	function activateTab(tab: browser.tabs.Tab, frameId?: number)
 	{
 		browser.tabs.sendMessage(tab.id, {
 			type: "activate",
 			activationSettings: sss.activationSettingsForContentScript,
 			isPageBlocked: isPageBlocked(tab),
-		}).then(() => {}, () => {});	// suppress errors
+		}, frameId === undefined ? {} : { frameId }).then(() => {}, () => {});	// suppress errors
 	}
 
 	function isPageBlocked(tab: browser.tabs.Tab): boolean
@@ -781,7 +787,7 @@ namespace SSS
 		if (DEBUG) {
 			return error => { log(`${text} (${error})`); };
 		} else {
-			return undefined;
+			return error => console.warn(text, error);
 		}
 	}
 
@@ -794,7 +800,7 @@ namespace SSS
 	}
 
 	// act when a content script requests something from this script
-	function onContentScriptMessage(msg, sender, callbackFunc)
+	async function onContentScriptMessage(msg, sender, callbackFunc)
 	{
 		if (DEBUG) {
 			if (msg.type !== "log") {
@@ -811,11 +817,13 @@ namespace SSS
 				break;
 
 			case "engineClick":
-				onSearchEngineClick(msg.engine, msg.openingBehaviour, msg.selection, msg.href, null);
+				await onSearchEngineClick(msg.engine, msg.openingBehaviour, msg.selection, msg.href, null);
+				callbackFunc({ ok: true });
 				break;
 
 			case "log":
 				if (DEBUG) { log("[content script log]", msg.log); }
+				callbackFunc({ ok: true });
 				break;
 
 			// messages from settings page
@@ -867,16 +875,15 @@ namespace SSS
 	/* ----------- CONTEXT MENU ----------- */
 	/* ------------------------------------ */
 
-	function setup_ContextMenu()
+	async function setup_ContextMenu()
 	{
 		// cleanup first
-		browser.contextMenus.onClicked.removeListener(onContextMenuItemClicked);
-		browser.contextMenus.removeAll();
+		await browser.contextMenus.removeAll();
 
 		if (sss.settings.enableEnginesInContextMenu !== true) return;
 
 		// define parent menu
-		browser.contextMenus.create({
+		await BrowserCompat.createMenu({
 			id: "sss",
 			title: sss.settings.contextMenuString,
 			contexts: ["selection"/* , "link" */],
@@ -893,10 +900,10 @@ namespace SSS
 		for (let i = 0; i < engines.length; i++)
 		{
 			const engine = engines[i];
-			if (!engine.isEnabledInContextMenu) continue;
+			if (!engine.isEnabledInContextMenu || !BrowserCompat.supportsEngine(engine)) continue;
 
 			const contextMenuOption = {
-				id: undefined,
+				id: "" + i,
 				title: undefined,
 				type: undefined,
 				parentId: "sss",
@@ -907,7 +914,7 @@ namespace SSS
 				const concreteEngine = engine as SearchEngine_SSS;
 				if (concreteEngine.id === "separator") {
 					contextMenuOption.type = "separator";
-					browser.contextMenus.create(contextMenuOption);
+					await BrowserCompat.createMenu(contextMenuOption);
 					continue;
 				}
 				contextMenuOption.title = sssIcons[concreteEngine.id].name;
@@ -938,10 +945,9 @@ namespace SSS
 			contextMenuOption.icons = { "32": icon };
 
 			contextMenuOption.id = "" + i;
-			browser.contextMenus.create(contextMenuOption);
+			await BrowserCompat.createMenu(contextMenuOption);
 		}
 
-		browser.contextMenus.onClicked.addListener(onContextMenuItemClicked);
 	}
 
 	function onContextMenuItemClicked(info: browser.contextMenus.OnClickData, tab: browser.tabs.Tab)
@@ -949,7 +955,7 @@ namespace SSS
 		const menuId: number = parseInt(info.menuItemId as string);
 		const selectedEngine: SearchEngine = sss.settings.searchEngines[menuId];
 		const button = info?.button ?? 0;
-		onSearchEngineClick(selectedEngine, getOpenResultBehaviourForContextMenu(button), info.selectionText ?? info.linkText, info.pageUrl, info.linkText);
+		return onSearchEngineClick(selectedEngine, getOpenResultBehaviourForContextMenu(button), info.selectionText ?? info.linkText, info.pageUrl, info.linkText);
 	}
 
 	function getOpenResultBehaviourForContextMenu(button: number)
@@ -963,32 +969,19 @@ namespace SSS
 	/* ------------ SHORTCUTS ------------- */
 	/* ------------------------------------ */
 
-	function setup_Commands()
-	{
-		// clear any old registrations
-		if (browser.commands.onCommand.hasListener(onCommand)) {
-			browser.commands.onCommand.removeListener(onCommand);
-		}
-
-		// register keyboard shortcuts
-		if (sss.settings.popupOpenBehaviour !== PopupOpenBehaviour.Off) {
-			browser.commands.onCommand.addListener(onCommand);
-		}
-	}
-
 	function onCommand(command: string)
 	{
 		switch (command)
 		{
-			case "open-popup":        onOpenPopupCommand(); break;
-			case "toggle-auto-popup": onToggleAutoPopupCommand(); break;
+			case "open-popup":        return onOpenPopupCommand();
+			case "toggle-auto-popup": return onToggleAutoPopupCommand();
 		}
 	}
 
 	function onOpenPopupCommand()
 	{
 		if (DEBUG) { log("open-popup"); }
-		getActiveTab().then(tab => browser.tabs.sendMessage(tab.id, { type: "showPopup" }));
+		return getActiveTab().then(tab => browser.tabs.sendMessage(tab.id, { type: "showPopup" }));
 	}
 
 	function onToggleAutoPopupCommand()
@@ -997,9 +990,9 @@ namespace SSS
 
 		// toggles value between Auto and Keyboard
 		if (sss.settings.popupOpenBehaviour === PopupOpenBehaviour.Auto) {
-			browser.storage.local.set({ popupOpenBehaviour: PopupOpenBehaviour.Keyboard });
+			return browser.storage.local.set({ popupOpenBehaviour: PopupOpenBehaviour.Keyboard });
 		} else if (sss.settings.popupOpenBehaviour === PopupOpenBehaviour.Keyboard) {
-			browser.storage.local.set({ popupOpenBehaviour: PopupOpenBehaviour.Auto });
+			return browser.storage.local.set({ popupOpenBehaviour: PopupOpenBehaviour.Auto });
 		}
 	}
 
@@ -1009,21 +1002,17 @@ namespace SSS
 
 	function setup_Popup()
 	{
-		// remove eventual previous registrations
-		browser.webNavigation.onDOMContentLoaded.removeListener(onDOMContentLoaded);
-
 		// If the user has set the option to always use the engine shortcuts, we inject the script
 		// even if the opening behaviour of the popup is set to Off (never).
 		if (sss.settings.popupOpenBehaviour !== PopupOpenBehaviour.Off || sss.settings.useEngineShortcutWithoutPopup) {
 			// register page load event and try to add the content script to all open pages
-			browser.webNavigation.onDOMContentLoaded.addListener(onDOMContentLoaded);
-			browser.tabs.query({}).then(installOnOpenTabs, getErrorHandler("Error querying tabs."));
+			return browser.tabs.query({}).then(installOnOpenTabs, getErrorHandler("Error querying tabs."));
 		}
 	}
 
 	function onDOMContentLoaded(details)
 	{
-		injectContentScript(details.tabId, details.frameId, false);
+		return injectContentScript(details.tabId, details.frameId, false);
 	}
 
 	function installOnOpenTabs(tabs: browser.tabs.Tab[])
@@ -1038,7 +1027,7 @@ namespace SSS
 	function injectContentScriptIfNeeded(tabId: number, frameId?: number, allFrames: boolean = false)
 	{
 		// try sending message to see if content script exists. if it errors then inject it
-		browser.tabs.sendMessage(tabId, { type: "isAlive" }).then(
+		browser.tabs.sendMessage(tabId, { type: "isAlive" }, frameId === undefined ? {} : { frameId }).then(
 			msg => {
 				if (msg === undefined) {
 					injectContentScript(tabId, frameId, allFrames);
@@ -1050,36 +1039,12 @@ namespace SSS
 
 	function injectContentScript(tabId: number, frameId?: number, allFrames: boolean = false)
 	{
-		if (DEBUG) { log("injectContentScript " + tabId + " frameId: " + frameId + " allFrames: " + allFrames); }
-
-		const errorHandler = getErrorHandler(`Error injecting page content script in tab ${tabId}.`);
-
-		const executeScriptOptions: browser.extensionTypes.InjectDetails = {
-			runAt: "document_start",
-			frameId: frameId,
-			allFrames: allFrames,
-			file: undefined,
-			code: undefined,
-		};
-
-		// Save function for either calling it as a callback to another function (1), or as its own call (2).
-		const injectPageScript = () => {
-			executeScriptOptions.file = "/content-scripts/selectionchange.js";
-			browser.tabs.executeScript(tabId, executeScriptOptions).then(() => {
-				executeScriptOptions.file = "/content-scripts/page-script.js";
-				browser.tabs.executeScript(tabId, executeScriptOptions)
-					.then(() => browser.tabs.get(tabId).then(activateTab), errorHandler)
-			}, errorHandler);
-		};
-
-		// The DEBUG variable is also passed if true, so we only have to declare debug mode once: at the top of this background script.
-		if (DEBUG) {
-			executeScriptOptions.code = "var DEBUG_STATE = " + DEBUG + ";",
-			browser.tabs.executeScript(tabId, executeScriptOptions).then(injectPageScript, errorHandler);	// (1) callback to another function
-			executeScriptOptions.code = undefined;	// remove "code" field from object
-		} else {
-			injectPageScript();	// (2) own call
-		}
+		return BrowserCompat.inject(tabId, frameId, allFrames)
+			.then(frames => browser.tabs.get(tabId).then(tab => {
+				if (frames === undefined) activateTab(tab, frameId);
+				else for (const injectedFrame of frames) activateTab(tab, injectedFrame);
+			}))
+			.catch(getErrorHandler("Page does not allow content-script injection."));
 	}
 
 	/* ------------------------------------ */
@@ -1093,6 +1058,7 @@ namespace SSS
 		href: string,
 		linkText: string)
 	{
+		if (!selectedEngine || typeof searchText !== "string" || !searchText.trim()) return;
 		// Check if it's a special SSS engine (engine groups never contain these).
 
 		if (selectedEngine.type === SearchEngineType.SSS)
@@ -1103,9 +1069,9 @@ namespace SSS
 				// Only assume link if the searchText is the link text.
 				// This prioritizes selection over link (since it shows on the "%s" part of the SSS context menu and causes confusion).
 				if (searchText === linkText) {
-					navigator.clipboard.writeText(linkText);	// if copying a link, just always copy its text
+					await BrowserCompat.copyText(linkText);
 				} else {
-					copyToClipboard(selectedEngine as SearchEngine_SSS_Copy);	// copy in the page script, to allow choice between HTML and plain text copy
+					await copyToClipboard(selectedEngine as SearchEngine_SSS_Copy);
 				}
 			}
 			else if (engine_SSS.id === "openAsLink") {
@@ -1123,18 +1089,23 @@ namespace SSS
 
 		if (selectedEngine.type === SearchEngineType.Group)
 		{
-			// Recursively collects all engines in the group, including engines inside infinitely nested groups.
+			const visiting = new Set<SearchEngine_Group>();
+			// Ignore missing references and cycles in imported groups.
 			function fillWithGroupEngines(expandedEngines: SearchEngine[], groupEngine: SearchEngine_Group)
 			{
+				if (visiting.has(groupEngine)) return;
+				visiting.add(groupEngine);
 				for (const engineId of (groupEngine as SearchEngine_Group).enginesUniqueIds)
 				{
 					const engine = uniqueIdToEngineDictionary[engineId];
+					if (!BrowserCompat.supportsEngine(engine)) continue;
 					if (engine.type === SearchEngineType.Group) {
 						fillWithGroupEngines(expandedEngines, engine as SearchEngine_Group);
 					} else {
 						expandedEngines.push(engine);
 					}
 				}
+				visiting.delete(groupEngine);
 			}
 
 			engines = [];
@@ -1142,7 +1113,7 @@ namespace SSS
 		}
 		else
 		{
-			engines = [selectedEngine];	// single element list, to reuse the for-cycle used for groups
+			engines = BrowserCompat.supportsEngine(selectedEngine) ? [selectedEngine] : [];
 		}
 
 		// Go through all engines in the list and search using each of them.
@@ -1233,20 +1204,20 @@ namespace SSS
 	function copyToClipboard(engine: SearchEngine_SSS_Copy)
 	{
 		if (engine.isPlainText) {
-			copyToClipboardAsPlainText();
+			return copyToClipboardAsPlainText();
 		} else {
-			copyToClipboardAsHtml();
+			return copyToClipboardAsHtml();
 		}
 	}
 
 	function copyToClipboardAsHtml()
 	{
-		getActiveTab().then(tab => browser.tabs.sendMessage(tab.id, { type: "copyToClipboardAsHtml" }));
+		return getActiveTab().then(tab => browser.tabs.sendMessage(tab.id, { type: "copyToClipboardAsHtml" }));
 	}
 
 	function copyToClipboardAsPlainText()
 	{
-		getActiveTab().then(tab => browser.tabs.sendMessage(tab.id, { type: "copyToClipboardAsPlainText" }));
+		return getActiveTab().then(tab => browser.tabs.sendMessage(tab.id, { type: "copyToClipboardAsPlainText" }));
 	}
 
 	function getOpenAsLinkSearchUrl(link: string): string

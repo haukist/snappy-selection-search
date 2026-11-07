@@ -590,6 +590,18 @@ namespace SSS_Settings
 
 		page.exportSettingsToFileButton.onclick = _ =>
 		{
+			if (BrowserCompat.isChrome) {
+				const blob = runActionOnDietSettings(settings, value => new Blob([JSON.stringify(value)], { type: "application/json" }));
+				const url = URL.createObjectURL(blob);
+				const anchor = document.createElement("a");
+				anchor.href = url;
+				anchor.download = "SSS settings backup (" + new Date().toJSON().replace(/:/g, ".") + ").json";
+				document.body.appendChild(anchor);
+				anchor.click();
+				anchor.remove();
+				setTimeout(() => URL.revokeObjectURL(url), 60000);
+				return;
+			}
 			// to save as a file we need the "downloads permission"
 			browser.permissions.request({ permissions: ["downloads"] }).then(wasPermissionGranted =>
 			{
@@ -610,6 +622,13 @@ namespace SSS_Settings
 				});
 			});
 		};
+		if (!BrowserCompat.supportsBrowserSearch) {
+			page.importBrowserEnginesButton.hidden = true;
+			page.importBrowserEnginesButton.style.display = "none";
+			const notice = document.createElement("p");
+			notice.textContent = "Chrome: add search engines using URL templates. Firefox browser-managed engines are preserved in backups but cannot run here.";
+			page.importBrowserEnginesButton.parentNode.insertBefore(notice, page.importBrowserEnginesButton);
+		}
 
 		// There are two elements for the import button: a button for display and the actual "real" button that lets the user pick the file.
 		// This is done because the file picker button can't be formatted and would look very ugly.
@@ -1196,7 +1215,9 @@ namespace SSS_Settings
 			{
 				const engineDescription = document.createElement("div");
 				engineDescription.className = "engine-uneditable engine-description-small";
-				engineDescription.textContent = "[Browser] Engine imported from the browser.";
+				engineDescription.textContent = BrowserCompat.supportsBrowserSearch
+					? "[Browser] Engine imported from the browser."
+					: "[Unsupported in Chrome] Firefox browser-managed engine. Preserved for export; use a URL engine instead.";
 				engineRow.appendChild(engineDescription);
 			}
 			else if (engine.type === SSS.SearchEngineType.Group)
@@ -1250,14 +1271,18 @@ namespace SSS_Settings
 		if (engine.type === SSS.SearchEngineType.SSS) {
 			// special SSS icons have data that never changes, so just get it from constants
 			const sssIcon = sssIcons[(engine as SSS.SearchEngine_SSS).id];
-			iconImgSource = browser.extension.getURL(sssIcon.iconPath);
+			iconImgSource = browser.runtime.getURL(sssIcon.iconPath);
 		} else {
 			iconImgSource = (engine as SSS.SearchEngine_NonSSS).iconUrl;
 		}
 
 		// Sets the icon for a search engine.
+		if (!iconImgSource) {
+			iconImg.removeAttribute("src");
+			return;
+		}
 		// "data:" links are data, URLs are cached as data too.
-		if (iconImgSource.startsWith("data:") || iconImgSource.startsWith("moz-extension:")) {
+		if (iconImgSource.startsWith("data:") || iconImgSource.startsWith("moz-extension:") || iconImgSource.startsWith("chrome-extension:")) {
 			iconImg.src = iconImgSource;
 		} else if (settings.searchEnginesCache[iconImgSource] === undefined && iconImgSource) {
 			iconImg.src = iconImgSource;
@@ -1268,7 +1293,7 @@ namespace SSS_Settings
 				saveSettings({ searchEnginesCache: settings.searchEnginesCache });
 			});
 		} else {
-			iconImg.src = settings.searchEnginesCache[iconImgSource];
+			if (settings.searchEnginesCache[iconImgSource]) iconImg.src = settings.searchEnginesCache[iconImgSource];
 		}
 	}
 
