@@ -42,6 +42,35 @@ floor (`runtime.getContexts`); compatibility with every intermediate release is
 not claimed. Store submission, signed Firefox distribution and public publication
 are outside this work.
 
+## Independent review
+
+Gemini 3.8 Flash (Medium), through the `gemini-code-review` skill and agy CLI,
+reviewed all 17 implementation files against the original `master`, then reviewed
+the recovery changes against the first implementation commit. New files were
+included by committing them before comparison; no implementation files were
+excluded as untracked.
+
+Confirmed improvements: recover from rejected settings initialization/update
+chains, serialize retries, preserve clipboard-document ownership, copy menu
+arguments before removing Chrome-unsupported properties, and safely inspect key
+event targets. Regression tests cover failed first reads, failed refreshes,
+persistent failures, recovery, clipboard ownership and failed clipboard requests.
+
+Other findings were checked before adoption. Offscreen responses are synchronous,
+so they do not need an asynchronous message-channel lifetime; the clipboard path
+matches Chrome's offscreen sample and passes real paste tests. The native DOM-host
+factory uses ordinary constructible-function/class semantics and passes both
+Firefox and Chrome integration tests; it avoids Chrome's unavailable isolated-world
+custom-element registry. Cosmetic function-size/argument-count thresholds did not
+justify restructuring existing search logic.
+
+The follow-up review's hypothetical document/window key target cannot propagate
+through this handler's `document.documentElement` listener (those nodes are its
+ancestors). Real trusted shortcut tests pass in both browsers. A retry promise
+returned from `.catch()` is adopted by the returned promise and handled by the
+message/event caller's catch; the persistent-failure test verifies errors are
+returned without unhandled rejection and later requests can recover.
+
 ## Manual installation
 
 Extract the generated Chrome ZIP, open `chrome://extensions`, enable Developer

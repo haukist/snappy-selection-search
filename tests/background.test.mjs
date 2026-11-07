@@ -159,6 +159,16 @@ test('a failed first startup can retry without restarting the extension', async 
   assert((await bg.message('getPopupSettings')).settings.searchEngines.length > 0);
 });
 
+test('persistent startup failures return errors without unhandled rejections and can later recover', async () => {
+  const bg = background({}, Promise.reject(new Error('Storage remains unavailable')));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  const responses = await Promise.all([bg.message('getPopupSettings'), bg.message('getDataForSettingsPage')]);
+  for (const response of responses) assert.match(response.error, /Storage remains unavailable/);
+  assert.match((await bg.message('getPopupSettings')).error, /Storage remains unavailable/);
+  bg.browser.storage.local.get = async () => structuredClone(bg.stored());
+  assert((await bg.message('getPopupSettings')).settings.searchEngines.length > 0);
+});
+
 test('clipboard cleanup respects existing document ownership and menu arguments remain intact', async () => {
   const bg = background();
   await bg.message('getPopupSettings');
