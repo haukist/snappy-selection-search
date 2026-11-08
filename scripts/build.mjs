@@ -57,7 +57,13 @@ if (target === 'chrome') {
   for (const html of ['settings/settings.html', 'swift-selection-search.html']) {
     const file = path.join(out, html);
     const prefix = html.startsWith('settings/') ? '../' : '';
-    await fs.writeFile(file, (await fs.readFile(file, 'utf8')).replace('<head>', `<head>\n<script src="${prefix}libs/browser-polyfill.js"></script>`));
+    let content = (await fs.readFile(file, 'utf8')).replace('<head>', `<head>\n<script src="${prefix}libs/browser-polyfill.js"></script>`);
+    if (html === 'settings/settings.html') {
+      content = content
+        .replaceAll('Firefox Sync', 'browser sync')
+        .replaceAll("wait for Firefox to sync or force the sync yourself from Firefox's menu", 'wait for your browser to sync');
+    }
+    await fs.writeFile(file, content);
   }
   await fs.writeFile(path.join(out, 'chrome-worker.js'), `importScripts('libs/browser-polyfill.js', 'libs/iconv-lite.js', 'browser-compat.js', 'search-variable-modifications.js', 'swift-selection-search.js');\n`);
   await fs.rm(path.join(out, 'swift-selection-search.html'));

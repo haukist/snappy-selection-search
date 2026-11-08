@@ -86,6 +86,10 @@ try {
   assert.equal(await options.locator('text=[Unsupported in Chrome]').isVisible(), true);
   assert.equal(await options.locator('[name="importBrowserEnginesButton"]').isVisible(), false);
   record('options explicitly label imported Firefox engines as unsupported');
+  const syncText = await options.evaluate(() => document.querySelector('[name="saveSettingsToSyncButton"]')?.closest('.setting')?.textContent || '');
+  assert(!syncText.includes('Firefox Sync'), 'Expected options page to not mention Firefox Sync');
+  assert(syncText.includes('browser sync'), 'Expected options page to mention browser sync');
+  record('options sync descriptions refer to browser sync instead of Firefox Sync');
   const search = async (engine, selection = 'Chrome search 日本語', openingBehaviour = 'new-bg-tab') => {
     const count = requests.length;
     await send('engineClick', { engine, selection, href: origin, openingBehaviour });

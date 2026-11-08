@@ -628,6 +628,15 @@ namespace SSS_Settings
 			const notice = document.createElement("p");
 			notice.textContent = "Chrome: add search engines using URL templates. Firefox browser-managed engines are preserved in backups but cannot run here.";
 			page.importBrowserEnginesButton.parentNode.insertBefore(notice, page.importBrowserEnginesButton);
+
+			const saveDesc = page.saveSettingsToSyncButton?.closest(".setting")?.querySelector(".setting-description");
+			if (saveDesc) {
+				saveDesc.innerHTML = 'Saves all SSS options and engines in browser sync. This does not force upload, so you may have to wait for your browser to sync. <span class="warn-when-over-storage-limit">Beware that storage size should be below 100KB for this to work. If above the limit, start by deleting any "data:image" URLs in your engines, or any other extremely long URLs.</span> Estimate size is not exact, so it may still work if above the limit, or fail if below it.';
+			}
+			const loadDesc = page.loadSettingsFromSyncButton?.closest(".setting")?.querySelector(".setting-description");
+			if (loadDesc) {
+				loadDesc.textContent = "Downloads previously saved SSS options and engines from browser sync. This will override all existing options and engines!";
+			}
 		}
 
 		// There are two elements for the import button: a button for display and the actual "real" button that lets the user pick the file.
@@ -825,7 +834,8 @@ namespace SSS_Settings
 
 		page.loadSettingsFromSyncButton.onclick = _ =>
 		{
-			if (confirm("Really load all settings from Firefox Sync?"))
+			const syncProvider = BrowserCompat.isChrome ? "browser sync" : "Firefox Sync";
+			if (confirm(`Really load all settings from ${syncProvider}?`))
 			{
 				browser.storage.sync.get().then(chunks => {
 					if (DEBUG) { log(chunks); }
