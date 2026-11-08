@@ -20,11 +20,17 @@ for (const [name, bytes] of Object.entries(zip)) {
   await fs.writeFile(file, bytes);
 }
 const requests = [];
+const largeIcon = await fs.readFile(path.join(root, 'src/res/default-engine-icons/imdb.png'));
 const server = http.createServer();
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
 server.on('request', (req, res) => {
   requests.push(req.url);
+  if (req.url === '/large-icon.png') {
+    res.writeHead(200, { 'Content-Type': 'image/png', 'Access-Control-Allow-Origin': '*' });
+    res.end(largeIcon);
+    return;
+  }
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   if (req.url !== '/plain') res.setHeader('Content-Security-Policy', "default-src 'none'; script-src 'self'; style-src 'none'; img-src data:; frame-src 'self'");
   res.end(`<!doctype html><title>${req.url === '/native-menu' ? 'SSS native menu fixture' : 'SSS fixture'}</title><p id="selection">Chrome search 日本語</p><input id="editable" value="Editable selection">${req.url === '/' ? '<iframe src="/frame"></iframe>' : ''}`);
@@ -37,6 +43,7 @@ try {
   context = await chromium.launchPersistentContext(profile, {
     executablePath: process.env.CHROME_PATH || 'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
     headless: false,
+    deviceScaleFactor: 2,
     ignoreDefaultArgs: ['--disable-extensions'],
     args: ['--enable-unsafe-extension-debugging', '--enable-extension-targets', process.env.SSS_NATIVE_MENU ? '--window-position=50,50' : '--window-position=-2000,-2000'],
   });
@@ -226,6 +233,7 @@ try {
         actionFilter: getComputedStyle(icons[0]).filter,
         brandFilter: getComputedStyle(icons.find(icon => !icon.classList.contains('sss-action-icon'))).filter,
         rows: new Set(icons.map(icon => Math.round(icon.getBoundingClientRect().top))).size,
+        engineSizes: icons.filter(icon => !icon.classList.contains('sss-action-icon')).map(icon => ({ width: icon.naturalWidth, height: icon.naturalHeight })),
         left: bounds.left, right: bounds.right, top: bounds.top, width: bounds.width, height: bounds.height,
         viewport: document.documentElement.clientWidth,
       };
@@ -286,6 +294,44 @@ try {
   assert(metrics.left >= 4 && metrics.right <= metrics.viewport - 4, JSON.stringify(metrics));
   assert.equal(await existing.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth), false);
   record('a vertical scrollbar does not make the popup overflow horizontally');
+  await existing.setViewportSize({ width: 1280, height: 720 });
+  await applyLayout({ ...layoutSettings, searchEngines: layoutSettings.searchEngines.map(engine => ({ ...engine, isEnabled: true })) });
+  for (let attempt = 0; attempt < 100; attempt++) {
+    metrics = await popupMetrics();
+    if (metrics.engineSizes.every(size => size.width >= 96 && size.height >= 96)) break;
+    await delay(50);
+  }
+  assert.equal(metrics.engineSizes.length, 14);
+  assert(metrics.engineSizes.every(size => size.width >= 96 && size.height >= 96), JSON.stringify(metrics.engineSizes));
+  assert(Math.abs(await existing.evaluate(() => devicePixelRatio) - 2) < 0.01);
+  await existing.screenshot({ path: path.join(results, 'popup-hidpi-icons.png'), clip: { x: 0, y: 0, width: Math.ceil(metrics.right + 10), height: Math.ceil(metrics.top + metrics.height + 15) } });
+  record('all default engine icons, including disabled defaults, load at 96px+ on a 2x display');
+  await options.reload();
+  await options.bringToFront();
+  const googleIndex = layoutSettings.searchEngines.findIndex(engine => engine.name === 'Google');
+  const googleIconField = options.locator('#engines > .engine-table-row').nth(googleIndex).locator('.engine-icon-link input');
+  if (!await googleIconField.isVisible()) await options.locator('#section_searchEngines .section-name').click();
+  await googleIconField.fill('');
+  await googleIconField.press('Tab');
+  await send('getPopupSettings');
+  const resetGoogle = await options.evaluate(async () => (await browser.storage.local.get('searchEngines')).searchEngines.find(engine => engine.name === 'Google'));
+  assert.equal(resetGoogle.iconUrl, layoutSettings.searchEngines[googleIndex].iconUrl);
+  record('clearing a default icon field restores its high-resolution URL');
+  const iconUrl = origin + '/large-icon.png';
+  await options.evaluate(({ settings, iconUrl }) => browser.storage.local.set({ ...settings, searchEngines: [{ type: 'custom', uniqueId: 'large-icon', name: 'Large icon', searchUrl: 'https://example.invalid/?q={searchTerms}', iconUrl, isEnabled: true, isEnabledInContextMenu: true }] }), { settings: layoutSettings, iconUrl });
+  await options.reload();
+  await options.bringToFront();
+  let downloaded;
+  for (let attempt = 0; attempt < 100; attempt++) {
+    downloaded = await options.evaluate(async iconUrl => (await browser.storage.local.get('searchEnginesCache')).searchEnginesCache[iconUrl], iconUrl);
+    if (downloaded?.startsWith('data:image/png;base64,')) break;
+    await delay(50);
+  }
+  assert(downloaded?.startsWith('data:image/png;base64,'));
+  const cachedPng = Buffer.from(downloaded.split(',')[1], 'base64');
+  assert.equal(cachedPng.readUInt32BE(16), 192);
+  assert.equal(cachedPng.readUInt32BE(20), 192);
+  record('downloaded high-resolution icons are cached at 192px instead of 48px');
   assert.deepEqual(pageErrors, []);
   assert.deepEqual(runtimeErrors, []);
   await fs.writeFile(path.join(results, 'chrome.json'), JSON.stringify({ browser: context.browser().version(), extensionId: id, checks, pageErrors, runtimeErrors, workerStopObserved: true }, null, 2));

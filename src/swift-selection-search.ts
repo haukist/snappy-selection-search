@@ -269,6 +269,32 @@ namespace SSS
 	let uniqueIdToEngineDictionary: { [uniqueId: number] : SearchEngine; } = {};
 
 	// Default state of all configurable options.
+	// Verified source URLs; bundled originals keep default icons sharp without network requests.
+	const defaultEngineIcons: { [id: string]: { legacyUrl: string; url: string; file: string } } = {
+		google: { legacyUrl: "https://www.google.com/favicon.ico", url: "https://www.gstatic.com/images/branding/product/2x/googleg_96dp.png", file: "google.png" },
+		bing: { legacyUrl: "https://www.bing.com/sa/simg/favicon-2x.ico", url: "https://img.icons8.com/fluency/192/bing.png", file: "bing.png" },
+		duckduckgo: { legacyUrl: "https://duckduckgo.com/favicon.ico", url: "https://duckduckgo.com/static-assets/favicons/DDG-icon_256x256.png", file: "duckduckgo.png" },
+		yandex: { legacyUrl: "https://yastatic.net/iconostasis/_/8lFaTHLDzmsEZz-5XaQg9iTWZGE.png", url: "https://yastatic.net/s3/home-static/_/f0/f0597b6727cc67dceebc4e3a87caf571.png", file: "yandex.png" },
+		baidu: { legacyUrl: "https://www.baidu.com/favicon.ico", url: "https://img.icons8.com/color/192/baidu.png", file: "baidu.png" },
+		youtube: { legacyUrl: "https://www.youtube.com/yts/img/favicon_144-vfliLAfaB.png", url: "https://www.gstatic.com/youtube/img/branding/favicon/favicon_192x192_v2.png", file: "youtube.png" },
+		imdb: { legacyUrl: "https://www.imdb.com/favicon.ico", url: "https://m.media-amazon.com/images/G/01/imdb/images/social/imdb_logo.png", file: "imdb.png" },
+		wikipedia: { legacyUrl: "https://www.wikipedia.org/favicon.ico", url: "https://upload.wikimedia.org/wikipedia/commons/thumb/3/34/Wikipedia_W_-_SuperTinyIcons.svg/120px-Wikipedia_W_-_SuperTinyIcons.svg.png", file: "wikipedia.png" },
+		amazon: { legacyUrl: "https://www.amazon.com/favicon.ico", url: "https://img.icons8.com/color/192/amazon.png", file: "amazon.png" },
+		ebay: { legacyUrl: "https://www.ebay.com/favicon.ico", url: "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/eb/0f/bc/eb0fbce7-3dbb-8931-2614-cd2975765fe3/AppIcon-0-0-1x_U007epad-0-1-0-85-220.png/128x128bb.png", file: "ebay.png" },
+		translate: { legacyUrl: "https://translate.google.com/favicon.ico", url: "https://www.gstatic.com/images/branding/product/2x/translate_96dp.png", file: "translate.png" },
+		maps: { legacyUrl: "https://www.google.com/images/branding/product/ico/maps15_bnuw3a_32dp.ico", url: "https://www.gstatic.com/images/branding/product/2x/maps_96dp.png", file: "maps.png" },
+		steam: { legacyUrl: "https://store.steampowered.com/favicon.ico", url: "https://store.steampowered.com/apple-touch-icon.png", file: "steam.png" },
+	};
+
+	function createDefaultIconCache(): { [url: string]: string } {
+		const cache: { [url: string]: string } = {};
+		for (const id of Object.keys(defaultEngineIcons)) {
+			const icon = defaultEngineIcons[id];
+			cache[icon.url] = browser.runtime.getURL("res/default-engine-icons/" + icon.file);
+		}
+		return cache;
+	}
+
 	const defaultSettings: Settings =
 	{
 		// NOTE: When adding new variables, keep the same order used in the settings page, roughly divided by section.
@@ -347,104 +373,95 @@ namespace SSS
 			createDefaultEngine({
 				name: "Google",
 				searchUrl: "https://www.google.com/search?q={searchTerms}",
-				iconUrl: "https://www.google.com/favicon.ico",
+				iconUrl: defaultEngineIcons.google.url,
 			}),
 			createDefaultEngine({
 				name: "Bing",
 				searchUrl: "https://www.bing.com/search?q={searchTerms}",
-				iconUrl: "https://www.bing.com/sa/simg/favicon-2x.ico",
+				iconUrl: defaultEngineIcons.bing.url,
 				isEnabled: false,
 			}),
 			createDefaultEngine({
 				name: "DuckDuckGo",
 				searchUrl: "https://duckduckgo.com/?q={searchTerms}",
-				iconUrl: "https://duckduckgo.com/favicon.ico",
+				iconUrl: defaultEngineIcons.duckduckgo.url,
 			}),
 			createDefaultEngine({
 				name: "Yandex.ru",
 				searchUrl: "https://yandex.ru/search/?text={searchTerms}",
-				iconUrl: "https://yastatic.net/iconostasis/_/8lFaTHLDzmsEZz-5XaQg9iTWZGE.png",
+				iconUrl: defaultEngineIcons.yandex.url,
 				isEnabled: false,
 			}),
 			createDefaultEngine({
 				name: "Baidu",
 				searchUrl: "https://www.baidu.com/s?wd={searchTerms}",
-				iconUrl: "https://www.baidu.com/favicon.ico",
+				iconUrl: defaultEngineIcons.baidu.url,
 				isEnabled: false,
 			}),
 			createDefaultEngine({
 				name: "YouTube",
 				searchUrl: "https://www.youtube.com/results?search_query={searchTerms}",
-				iconUrl: "https://www.youtube.com/yts/img/favicon_144-vfliLAfaB.png",
+				iconUrl: defaultEngineIcons.youtube.url,
 			}),
 			createDefaultEngine({
 				name: "IMDB",
 				searchUrl: "https://www.imdb.com/find?s=all&q={searchTerms}",
-				iconUrl: "https://www.imdb.com/favicon.ico",
+				iconUrl: defaultEngineIcons.imdb.url,
 			}),
 			createDefaultEngine({
 				name: "Wikipedia (en)",
 				searchUrl: "https://en.wikipedia.org/wiki/Special:Search?search={searchTerms}",
-				iconUrl: "https://www.wikipedia.org/favicon.ico",
+				iconUrl: defaultEngineIcons.wikipedia.url,
 			}),
 			createDefaultEngine({
 				name: "Amazon.com",
 				searchUrl: "https://www.amazon.com/s?url=search-alias%3Daps&field-keywords={searchTerms}",
-				iconUrl: "https://www.amazon.com/favicon.ico",
+				iconUrl: defaultEngineIcons.amazon.url,
 			}),
 			// createDefaultEngine({
 			// 	name: "Amazon.co.uk",
 			// 	searchUrl: "https://www.amazon.co.uk/s?url=search-alias%3Daps&field-keywords={searchTerms}",
-			// 	iconUrl: "https://www.amazon.com/favicon.ico",
+			// 	iconUrl: defaultEngineIcons.amazon.url,
 			// 	isEnabled: false,
 			// }),
 			createDefaultEngine({
 				name: "eBay.com",
 				searchUrl: "https://www.ebay.com/sch/{searchTerms}",
-				iconUrl: "https://www.ebay.com/favicon.ico",
+				iconUrl: defaultEngineIcons.ebay.url,
 			}),
 			// createDefaultEngine({
 			// 	name: "eBay.co.uk",
 			// 	searchUrl: "https://www.ebay.co.uk/sch/{searchTerms}",
-			// 	iconUrl: "https://www.ebay.com/favicon.ico",
+			// 	iconUrl: defaultEngineIcons.ebay.url,
 			// 	isEnabled: false,
 			// }),
 			createDefaultEngine({
 				name: "Translate to EN",
 				searchUrl: "https://translate.google.com/?sl=auto&tl=en&op=translate&text={searchTerms}",
-				iconUrl: "https://translate.google.com/favicon.ico",
+				iconUrl: defaultEngineIcons.translate.url,
 			}),
 			createDefaultEngine({
 				name: "Google Maps",
 				searchUrl: "https://www.google.com/maps/search/{searchTerms}",
-				iconUrl: "https://www.google.com/images/branding/product/ico/maps15_bnuw3a_32dp.ico",
+				iconUrl: defaultEngineIcons.maps.url,
 				isEnabled: false,
 			}),
 			createDefaultEngine({
 				name: "Steam",
 				searchUrl: "https://store.steampowered.com/search/?term={searchTerms}",
-				iconUrl: "https://store.steampowered.com/favicon.ico",
+				iconUrl: defaultEngineIcons.steam.url,
 				isEnabled: false,
 			}),
 			createDefaultEngine({
 				name: "(Example) Search current site on Google",
 				searchUrl: "https://www.google.com/search?q={searchTerms} site:{hostname}",
-				iconUrl: "https://www.google.com/favicon.ico",
+				iconUrl: defaultEngineIcons.google.url,
 				isEnabled: false,
 			}),
 		],
 
 		// Icon cache for every engine that comes active by default in SSS. Other engines' icons will automatically fill this object when they are loaded in the options page.
-		searchEnginesCache: {
-			"https://www.google.com/favicon.ico"                        : "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAEHklEQVRYhb2WXWwUVRTH56XBotQn33wQBXlTov3gQWtErKB9IGkptPYBxYox6INRa0LQQELRYqEJ8NAPLMQ0bCuBVqzQZhGpH91YJGYJaYMW0O1XZnb6xc7u7Nxz9u+D203vzGx3tlZPcl723j2///m4d66ieDRd1/OIqIqIWolokJl1ZraSHiaiweRapa7reV7jZjTTNNcRURszx+DRmDlKRCdN01y7ZDCAlUKIBmYmr2AXIUIIcTgUCuVmm/XjzHxzqWAXIUHTNNd4gluW9RQza26BaHwURvsXmHn/bYS3bYZasgHqi0UIl5Vg+r23YJxuBo3+lU6ECmC9l8wdcJoYw+z+j6BuKoT6QsHivqkQs598CJoYcxWRthKTk5P3u5U91tcD7ZXizGCba6XPwbzS59oO15kQQjTYNxtnTmUNXuhz9ftd2yGEqLeXfp192mN9PWkDT9VUItJyDLFvziHWcx6RluOYerNKhh+pAxKJdPMgpFYQUZvU8/FRaC8/6wDr1VsRvxZwDQoA8cEBhHeU4t7xz9PuSTGIWhVFURQAD9ovmUjjOw749J7XkJibyxg4YUQy7gEAZjY0TVulEFGVFCA6AtG7ArO1j6Tg4W2bwTNTngJnY0S0XSGiVknZnToIfw6EPwfGsYegbclH7NKFZYcnBTQpRDQo/fhrSUqA8Ocgfm41IMR/JSCgMLO+8EfR/7AkgG5ULhpk48GIZ79yU06EmVWFmS1JwOUVkgD+Y9+yCWj/SUKBmeP/q4C2q3FXAWFJgL0FwR3LJqAz4KiA6hzC6y9JAkb7n4DF2Q/hbZUdAq4OyXGIKOByDD9NwS/0rMYzvq3oGvFnLcA3YDkETMzIV/P8MZTGPBG9g6g/F3VdTyPfV4Z8XxlKul5HODbtGX4vlkB5oyHBdzZFHfuIqELRdT2PmaXVowMHUvB5r+79ADPxzFexRUDtmZgj+w5n/w0AD8x/jE4uXByPqCg++6pDROnXu9E/di0t/Nb0Xezq9mHjwVkJXt5oIBp3lL954ed4LbM8aRfv9jsEzHv5t++i4XobOm9dxFe/X8KJYDve8O9Fga8c+b4yFJ2qxfOfhVICfhiW37XMbJmm+Zj9QXLYntGXw91pRWTygvadKD7yi+PsA4AQ4pDjRQRgJTPfsG/u/fNHFJ+tzlpAUUcFWoLdDjgz/wbgvnSP0jXJ16tkE4aGvT8fRWFHuSf47u8+xtDUiBt8EsCjrvAFlVjvJgL4ZzhPD53Hnu8PYEt3DTZ0VqCoowIlXbtQc3kfTgTbMTx12+2vYOZJy7KeXBRuq0TQNdISLFn2xTO3WygUyhVC1NtPR5ZgSwhxCOl67rUaRNSavDi8gg0ianYctX9jmqatIqLtRNRERAFmVpk5nnSViALJtQrM33Ae7G92y3s6IRzKLQAAAABJRU5ErkJggg==",
-			"https://duckduckgo.com/favicon.ico"                        : "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAFnklEQVRYhcVXb0wTZxzmEyZsbovJnG7xw0j2wZm55K4jWzQh0wwkZFsMgetVMhVB0Bm3ocEMo2MoEZcwkzlYLIHJUIGJdraoiAwq2yRz0TEcTgz3p73SUQo97or0P88+dDutvXqd27I3edP70N/7/N7n97y/PykpSS5U5adyhoxshibqOYrsZyjdKEMR3ujWjXIU2c/QRD1nyMhGVX5qsudqrpFNK5ZwFNnA0DqJ1ZNwVBbC3VwL0dQE2WqGbDVDNDXB3VwLR2UhWD0JhtZJHEU2jGxaseSRgZGTs4AvIKs5mpi178iF1N2O0LQLwQkBcp8Jnk4j3I01cDfWwNNphNxnQnBCQGjaBam7HfYdueBoYpYvIKuRk7PgEW5NDPJFmZixtCLslSCaWyDsLgCrJx+6hd0FEM0tCHslzFhawW3OBEcRg0mzwdLESobWCUJ5HoJOG+SBLti2rdMEfnDbtq2DPNCFoNMGoTwPDK0ThA3kS5o3Z2id4KwuRVgS4TYeBKsnMb6/CFJ3B6Tes5g++RnsO99O2hG38SDCkghndSkYWickZAI5OQs4ihgUyvOiBjXblUM8HV8gLHlw//L9dgNCeV5STjhrtiMsiRDK88BRxKCqJvgCspovykTQaVNurtBZlg1bWTZcR/fCPzaiOBGWRbiNB8AXr9FmorEGQacNfFEm+AKyOl50NDE7Y2mFfMUSZ8xveR13b3yHRCvsnYHz4xJNJ+SBrqgwaWI2JhQcRTbYd+Qi7JVUBecf+zUhuOKEOAW+9A1NYYa9UvSJUmRDNPZV+akMrZOk7naI547HGU0cqQAAcOMeXP2Zx5w/FAd+i3HhwsBtOCwdmiyI5hZI3e1gaJ2EqvzUFM6Qkc3qSYSmXarvfOZiGwDg+ohDk4VIwAe+ZK1mnghNu8DqSXCGjOwUhibqHZWFCE4Iqgaz1/oVgEAwDFH2qYK3fHMdg0M2uI7u1WQhOCHAUVkIhibqUziK7Hc3H4bcZ1IXjtWigBTv68T6nV/BF4gPQ/4HJ/BJkxVSz2ltMfaZ4G6uBUeR/SkMpRsVTU3wdBpV/+w506iAtJ0fwv6jPaoMzM9Hf2Xrn6/IQMJZsRyexmWY+fI5jO968d6ZnUaIpiYwlG40haEIr2w1w91Yo+rARN1uzdhjfg7w3QS8vZjrN2D2zGKEf3ockeE0RIbTEPzhCTgrlsfkBNlqBkMRXk0HbO/mPgTYj3nnLkRuPqmAKfuXNNw1Pw3XgRfAbohPSrLVDIbWyZohYPVkXBpW8IWSKNjQY5BOLYW3YwnktqWYqkuHbevLCc+LCUFUhLUJRcjqyYRZcF4oRmQ4Db5LizSFl1iEGs+Q1ZPwnD6mHoKwiLnL6YgMp2HWtBhTdelwH07H1KfPY6blWfguLULo2kLYy1Y+5BlqJCJWT+L3w+8llIH9/fWwl67EVF06vJ3PIDDwFELXFsLXswieY8tgL40Fj0tEManY3KLqAF+yNqEDQgX1t+iPS8XJFCNWTyI4Oa7qwOTn+5IGVy1GceV4oEvV2HtVPQE9WL5vF+rA0AnEl6gcazUkrJ7EVOsRAAAj3cJ57hQm56KMRO56wRa+ijFahxOHVmN7dxa697wWZ+82HkTQaQO3WaUh0WrJWD2J8Y+2AACuOLpQ0puFrd9m49CPu7CzLx9ll9Zh79drUNKbhZLeLLTXrI6xTaoli2lKD8Q2payeBPfOKsxHwrjq7FGADJYs5bu49953a+3qmJsn1ZT+teLa8isWRZgB/g6G3IMK0Mbzb8LQlYWii2+h7dRGVJ2MsnC6etWjteUxonxwMDl3HN7By3DNjWPP94W4wLfDH55TxBhwcGDpV8B8SMFj+QeDyf2aUBvNQqIbfv4O/PwoAvYxBOxj8POj8PN3EJp0/jujWTwb/8NwGsfIfzSe/wEDn3UUirFnMwAAAABJRU5ErkJggg==",
-			"https://www.youtube.com/yts/img/favicon_144-vfliLAfaB.png" : "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAA0klEQVRoge2YwQ2EIBREfwmUYCmWYCmWsB1YgqVQEiXMXiDxgCskCEx2XjJHdR75UcFMCCGEqABmDmYrzD4x/hIU5npNus8KM9eyaGmZLqkpXrOSveOfyh8TlHzKQTM2VeMEs210sYpsOYEwQbHSBNrxSZHA6LwnAAAhkAsk9p1cIOEcuUCCXgAAzpNcILEsEtAIVQu0ekZ3AdrXKO2HjPpXolMkMDo5AfotJfemnmmMsuWjAPfBVpTwE5S8i/9ZfuZxKi5eKPfK8XrTkkIIIf6CLwP44M2GNwfzAAAAAElFTkSuQmCC",
-			"https://www.imdb.com/favicon.ico"                          : "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAE20lEQVRogdWVyW+TVxTFL0hGLKh1LVVCCtgk7226qdRFV911A5VA6qJAQklLNyUQoFIRkxgKAcQkiELiKAlx4ozEGezEsePY2NgJBAJpQqJMTQhVW3VUp3/hdFH5q5/fF7LtW/wWPu/e8875ZH+mZz0Mk6HxbsbfS9JIxrsZ9DTA+OsbaSRPAwx60sX4c0EayZMuBo11Mv6Yk0Yy1smgxx2M32elkTzuYNBoO+O3GWkko+0MGmlj/DotjWSkjUEjLYxfpqSRjLQwKONn/DwpjSTjZ1C6mfHThDSSdDOD0k2MH59LI0k3MSjlY/wwLo0k5WNQspHx/VNpJMlGBj1oYHw3Jo3kQQOD4vWMbx9JI4nXM2i4jvFqVFpMRoogPA6L/R868WpUwluxWdFzz16NSu1MeByr6sLjwBefuZBo91j7+f7eis1KLjuG6xg0XMtYyUiLRKsHRGRR5HZgJSNx7IBL0YkIGxzrsJKRmE8I7YyIsJKRtnouxw64bP2z+usYrmVQzMt4mZYW8Ra9wMu0fQEist3JPVurQHbOrkDW++twkZIxS8zLoKEaxnJKWgz79QLLKYmjn9oXGPZ7Vj1bTukFllMSGxzr1vR49+2NypzzjfVKzuWUxFANg4aqGUtJaRFr1gssJSWOfmIf8u6Fzdj5/ibbs6WkXmApKVHkdiharNmzqn8uXx17U8k6VM2gyF3GYkJaRH15BbY6sJiQOFKqXuDctB5EhCOlLhRtdShalsWEXmAxIa35LFGfR/Mv2eVEyS6noh0pdSlZI3cZNFjFWIhLi2ijXmAhLlGed0E2RG6Y/GALcb3AQtymQKNH8y8vddlquVkHqxgUrmTMx6RFpEEtULjVgfmYRPl+1ax4579PJ/d7mtWyzMf0AvMxicK8ApEGj+Zfvt9lq+VmDVcyaOAOYy4qLQbr9QJzUYnDH6tm+Z/ttLmoXmAuqhcYrPfY+ttpuVkH7jCo/zZjNiIswnVutcAWB2YjAof3qWb+6wXabyJ/Zjai/z/MRgQKt6gFwnVubffwPpetlpu1/zaDQrcYM2Fh0V+rF5gJCxwqUc3s5vJnZsJ6gZmwXqC/1q3tHipx2Wq5WUO3GBS8yZgeEBb9Xj3Y9IBAWZ7Z9IAabs8HzjVnsppWwOvWdstKXLZabtbgTQb13WC8CAmLUI1e4EVIoKxYNXsRUsOVFbvWnMlq+a/bUI1b27XzKyt2KVn7bjCo9zpjKigsgtVqgW0FDkwFBQ7uVc2mggLbCv57ksFqt+1MfoH88ESETGuhtrt7hxO7d6hvtYN7XUrW3usM6rnGmOwVFn1VeoHJXoGDe9QLJnvVAn1VbtuZ/LB22Pnbca+iQMnac41BgauMiW5h0VOpF5joFvh8t3pBvrbazOsCvfPWRqSaCm13P9ruVP5jtr+3Sck50S0QuMqgwBXG84D439Jd6UbSV2h7FrjCoK7LjGddwki6LjPofgVjvFMYyf0KBnVeYjxpF0bSeYlBHRcZY23CSDouMqj9AuNxizCS9gsMajvPeOQXRtJ2nkGt5xijTcJIWs8xqOUsY8QnjKTlLIP8Zxjpe8JI/GcY1Hya8bBeGEnzaQY1nWKk6oSRNJ1ikO8kI1krjMR3kkGNJxgPvMJIGk8wqOE4I14tjKThOIPqv2SYzD/ZLZPkdY1wuAAAAABJRU5ErkJggg==",
-			"https://www.wikipedia.org/favicon.ico"                     : "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAADH0lEQVRoge1Z7Y3sIAwkVdAGXdACHaQDWkgFFJEKUgIl0AJV4PdrIuAIOMmusnvvTrJ00jrB4xl/oAjR+Usp0SdYL8aPDfoSmKeDuwXi6aBugXg6mNsgng7k/wbwdBC3QTwdwB+ApwP4A4B/tNaklCKlFGmtyRhTWP67tZZSSmx/7z2t63roD9/Re+FnjPkJwHtP1lpSStE0TU2TUtKyLOS9p5QSbdtG8zwXPkIIEkLQNE00zzOt60opJQohkHOOtNY//LXW5JyjEMLhe/Pz4deUUIyRrLV7EPnDMcYmjeu6kpSyeGZZlqZvCKFIknPuUB7Lsux+Wuvm+c0aiDGSMaYAkNPWMmttwQDk0Hu3tfYwKUgMkpdnnVXE27YVWVVKdQ/z3heZPWLMe09SSlJKHQYFc86REOKQzS6AGCPN87xnVAhB27axWOjJY1kWEkLstdE7H0WLmjsFoNa2EIKUUt1DoW+wVrOA7B/puVZAT4osAMhCzkIvGy0WcvrRWTjZN8aQlHLI+nCQOeeKgLTWQxaklHtBgwXvPasZgCmu7xBAjHGXBWxUfHUPt9ayM4o64TDFApDLAgBGmQELeS1gsHEShi7FiY0FIJcFbFSExphisPV6eUuyvQF3GgACygGMshlCKNaF3iTPDdnn+J4CgBbIWS2OQI9a4rquw8F1GUBKaZ+0kMbooLqYR9NXa81m6hKAbdsKWfQKLZcQhwXvPQkhWIV+GQA0msvoqNggHyxk+RxpsQB/TqHfAoAFC9YabBhEyCY60pH0wBZncN0GkLOA7lIPnFrLdUeqawG1cjb7lwFgo2zdFdBJamnVHQm/Y3CNVpSXAsChkIWUcl/ysALXnQSyyjtSjHFfG0ZL4ksBpJSKayd6N6Zoa4fB/aJmARf4q3FcBhBCKIpZSjnc9fM2jC7Gudy8BUDr3jxNU3fbxDM58DNrw0sBtHTNGUL1XOAubW8BgBsb5MDZ9XPmuBvq2wAgo5y7a24o9jPPvA1ACIGstafaIDrS1db5UgBP21d/pfkd38h+BYBvBNH6WP81IJrBfwuIbvCfCqYX4z8UwrBWOPp89wAAAABJRU5ErkJggg==",
-			"https://www.amazon.com/favicon.ico"                        : "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAEq0lEQVRogc1aQWvjRhQWWPoFPq6V00LZQ8HJrZcUEvu0lwSkubfQ5J6Cf8Cy9XkXKws9hQiKfVh3nb000Mop5BTvmN1LqNVC20MjqGGxkbuFzWG/HsbjleSZsSXHdh884jh60vfNfO/NG2U0TWAAHgI4AfAa6zcK4FsAZRHWJPBPAVytF6/SLgHcl4F/CGC0ZoDz2BDA50nwRQD/LnJX3/dRcxzYhMAmBDldh24Y0A0Du+UybEJQcxxQSu+KxCccfA4LaN05PkZxcxO6YSA3dl3gucjP4uYmWmdni5K45ASsLNG+70+A6wLgMiJRt2wbYRguQmJHA9DIAv6eaaYCK5uRUrmM0Shz6j3TALxNExEEAQobG6kBx8DrekxuNcfJSuB3LW1EpVJZCLzI75lmVgLvUxEIgkCdoLo+SVBKKSilqDkOChG5yTxrdUpF4PT0VEmgUqkI43zfF5KI5k5WGaUiYBEiBJEzDBRMU5mMlUpFmewrIVA7PpYCODg8VMc6jrJqyWbvTglwG41GMY3XHAe+7ytj2u22sqTahKyOQBajlMZWY570nMT/hoDv+7GZsca9UXTVFvnaCARBANd1Ydl29oVtHQTCMBQuaqpmTlWFVkqAUhrrheYhMYuYZdurISCrJqrRtQjBbqmkvH4lBIIgQME0hXJIVhTP82ILW7fbVc7MSiQka+Q4iIJpwvM8YWy3211vFQrDcDLyMrm4riuNrzmOdNOzkirUOjtTJm1hRkscJSAaAGvZBKK9TBYJzNpHLH0Gvjo4UI/gjCqy9pXYHrfSye0g91K5LI190WrNXI11w8DNzc3yCHxTrSofnjPEu6owDGfuyPhgPK5Wl0dgVg7wMholQSmdks6sliLt1nJuAr7vzyUDTkRWLkXfR724tbUcAgBib+BkMkjjopi0byhSEfA8by7wMpm4rovi1pb0ut1SKfWbutTNXDKZZT1RFFzBNPGi1QIgl+LB4WGm14yZ2mnXdZWVJUrKIgRBEMTik2U164Y+MwGAbexd14VFyGRvwFsKmxA8rlbR6/Wk8e12GzYhyv4Jf3eY9zvAP+I1Ik5g2AP+/D4ToTuz/ivg8kugrjFvjL2uMXwJixMY9NjF7T3gXfpVcWEb9BjQi33g8gvg+gnQOfpIpv9qKmRaQn/9CDTzjMjVkXTqVmoX+4zAu2DqT+IcGPYYCc58lURuQzbyzTybBYB9buaFl8uTeNADzrcnJD7Ux9L6o8kectd281NcLg2NPYvLqvO1KOq9BqAvveltyG7KkyiaVBd7wPVToS7nskGPAbw6App5NkD8/s08IwQAv56w78QK+E0D8N3Mh/G8qGvxGWlEHvryASP15hEjdv0k4U+ZJNp7QCMRH/3c3otr/WKfxYvtmQZgf64Ruw0ZiOf5j7MQ9boATOLvH5KzGL325QNxCVfn3g7/T+X8PSxPsuf5acB1BeDkddzPt7OuPV7yiMEw9S144jXzUzMxBT76+/k2GwTBwjSn9ZE8cgBgB4scNRj8wnKF671zxPT8epwT/glL+MUr2FsAn8nOS9wH8POiT1ii/QBgY55TK2WwIy4U6z0AMhxjqCF5wGNs/wEm1A75lp2QYwAAAABJRU5ErkJggg==",
-			"https://www.ebay.com/favicon.ico"                          : "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAuElEQVQ4jWNgwAKuX7+uFhgYuJaPj+8DHx/fh8DAwLXXr19Xw6YWq2YxMbEX7e3t5e/eveN/9+4df3t7e7mYmNgLogwJDAxc297eXo4u3t7eXh4YGLiWoAF8fHwftm/f7o4uvnXrVg8+Pr4PWDU9NbL4D8MMKZdQ8Nf1TP+/rmf6/2UdhG7bIQ7HJBkAw6MGjBqA04BnHj6PSTVg0n79x3ADvh875QwzhBgDJu3Xf3zn9QFHBgYGBgBTkbt/nS2hPQAAAABJRU5ErkJggg==",
-			"https://translate.google.com/favicon.ico"                  : "data:image/png;base64,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",
-		}
+		searchEnginesCache: createDefaultIconCache(),
 	};
 
 	if (DEBUG) { log("Startup time is: " + new Date().toLocaleString()); }
@@ -703,8 +720,39 @@ namespace SSS
 		// 3.48.0
 		// Settings "popupOpenCommand" and "popupDisableCommand" could be deleted now, but we are
 		// keeping them in case SSS needs to be reverted to the old version for some reason.
+		if (upgradeDefaultEngineIcons(settings)) shouldSave = true;
 
 		return shouldSave;
+	}
+
+	function upgradeDefaultEngineIcons(settings: Settings): boolean
+	{
+		let changed = false;
+		const icons = Object.keys(defaultEngineIcons).map(id => defaultEngineIcons[id]);
+		for (const engine of settings.searchEngines) {
+			if (engine.type !== SearchEngineType.Custom) continue;
+			const custom = engine as SearchEngine_Custom;
+			const original = defaultSettings.searchEngines.find(candidate => candidate.type === SearchEngineType.Custom
+				&& (candidate as SearchEngine_Custom).searchUrl === custom.searchUrl) as SearchEngine_Custom;
+			if (!original) continue;
+			const icon = icons.find(candidate => candidate.url === original.iconUrl && candidate.legacyUrl === custom.iconUrl);
+			if (icon) {
+				custom.iconUrl = icon.url;
+				changed = true;
+			}
+		}
+		if (!settings.searchEnginesCache) {
+			settings.searchEnginesCache = {};
+			changed = true;
+		}
+		const bundled = createDefaultIconCache();
+		for (const url of Object.keys(bundled)) {
+			if (settings.searchEnginesCache[url] !== bundled[url]) {
+				settings.searchEnginesCache[url] = bundled[url];
+				changed = true;
+			}
+		}
+		return changed;
 	}
 
 	function createSettingIfNonExistent(settings: Settings, settingName: string): boolean

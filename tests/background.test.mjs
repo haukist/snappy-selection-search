@@ -194,3 +194,71 @@ test('clipboard cleanup respects existing document ownership and menu arguments 
   await bg.context.BrowserCompat.copyText('after failure');
   assert.equal(closed, 3);
 });
+
+test('all default engines have verified 96px+ bundled icons and HTTPS source URLs', async () => {
+  const bg = background();
+  const defaults = (await bg.message('getDataForSettingsPage')).defaultSettings;
+  const engines = defaults.searchEngines.filter(engine => engine.type === 'custom');
+  assert.equal(engines.length, 14);
+  assert.equal(new Set(engines.map(engine => engine.iconUrl)).size, 13);
+  for (const engine of engines) {
+    assert.equal(new URL(engine.iconUrl).protocol, 'https:');
+    const cached = new URL(defaults.searchEnginesCache[engine.iconUrl]);
+    assert(cached.pathname.startsWith('/res/default-engine-icons/'));
+    const png = fs.readFileSync(path.join(root, 'src', cached.pathname.slice(1)));
+    assert.equal(png.subarray(1, 4).toString(), 'PNG');
+    assert(png.readUInt32BE(16) >= 96 && png.readUInt32BE(20) >= 96, engine.name);
+  }
+});
+
+test('legacy default icon URLs migrate without changing engine identities or customized records', async () => {
+  const current = background();
+  const settings = structuredClone((await current.message('getDataForSettingsPage')).defaultSettings);
+  const oldIcons = {
+    'www.bing.com': 'https://www.bing.com/sa/simg/favicon-2x.ico',
+    'duckduckgo.com': 'https://duckduckgo.com/favicon.ico',
+    'yandex.ru': 'https://yastatic.net/iconostasis/_/8lFaTHLDzmsEZz-5XaQg9iTWZGE.png',
+    'www.baidu.com': 'https://www.baidu.com/favicon.ico',
+    'www.youtube.com': 'https://www.youtube.com/yts/img/favicon_144-vfliLAfaB.png',
+    'www.imdb.com': 'https://www.imdb.com/favicon.ico',
+    'en.wikipedia.org': 'https://www.wikipedia.org/favicon.ico',
+    'www.amazon.com': 'https://www.amazon.com/favicon.ico',
+    'www.ebay.com': 'https://www.ebay.com/favicon.ico',
+    'translate.google.com': 'https://translate.google.com/favicon.ico',
+    'store.steampowered.com': 'https://store.steampowered.com/favicon.ico',
+  };
+  const expected = new Map();
+  for (const engine of settings.searchEngines.filter(engine => engine.type === 'custom')) {
+    expected.set(engine.uniqueId, engine.iconUrl);
+    const url = new URL(engine.searchUrl);
+    engine.iconUrl = url.hostname === 'www.google.com'
+      ? url.pathname.startsWith('/maps/') ? 'https://www.google.com/images/branding/product/ico/maps15_bnuw3a_32dp.ico' : 'https://www.google.com/favicon.ico'
+      : oldIcons[url.hostname];
+    assert(engine.iconUrl, engine.name);
+  }
+  const google = settings.searchEngines.find(engine => engine.name === 'Google');
+  const customizedIcon = { ...google, uniqueId: 'custom-icon', name: 'My Google', iconUrl: 'https://custom.test/icon.png' };
+  const customizedSearch = { ...google, uniqueId: 'custom-search', searchUrl: 'https://custom.test/?q={searchTerms}' };
+  settings.searchEngines.push(customizedIcon, customizedSearch);
+  settings.searchEnginesCache = { [customizedIcon.iconUrl]: 'data:image/png;base64,user-icon', [customizedSearch.iconUrl]: 'data:image/png;base64,legacy-icon' };
+  const before = structuredClone(settings.searchEngines);
+  const migrated = background(settings);
+  await migrated.message('getPopupSettings');
+  const stored = migrated.stored();
+  for (let index = 0; index < before.length; index++) {
+    const original = before[index], actual = stored.searchEngines[index];
+    const { iconUrl: originalIcon, ...originalFields } = original;
+    const { iconUrl: actualIcon, ...actualFields } = actual;
+    assert.deepEqual(actualFields, originalFields);
+    if (expected.has(actual.uniqueId)) assert.equal(actual.iconUrl, expected.get(actual.uniqueId));
+  }
+  assert.equal(stored.searchEngines.at(-2).iconUrl, customizedIcon.iconUrl);
+  assert.equal(stored.searchEngines.at(-1).iconUrl, customizedSearch.iconUrl);
+  assert.equal(stored.searchEnginesCache[customizedIcon.iconUrl], 'data:image/png;base64,user-icon');
+  assert.equal(stored.searchEnginesCache[customizedSearch.iconUrl], 'data:image/png;base64,legacy-icon');
+  const restarted = background(stored);
+  await restarted.message('getPopupSettings');
+  assert.deepEqual(restarted.stored(), stored);
+  const imported = await current.message('runBackwardsCompatibilityUpdates', { settings });
+  assert.equal(imported.searchEngines.find(engine => engine.name === 'Google').iconUrl, expected.get(google.uniqueId));
+});

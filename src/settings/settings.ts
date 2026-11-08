@@ -214,7 +214,7 @@ namespace SSS_Settings
 		var img = new Image();
 		img.crossOrigin = "Anonymous";
 		img.onload = _ => {
-			const maxSize = 48;
+			const maxSize = 192;
 			let width;
 			let height;
 			let xPos = 0;
@@ -1566,9 +1566,10 @@ namespace SSS_Settings
 	function setIconUrlInput(engine, iconLinkInput, icon)
 	{
 		engine.iconUrl = iconLinkInput.value.trim();
-		icon.src = engine.iconUrl;
+		const cached = settings.searchEnginesCache[engine.iconUrl];
+		icon.src = cached || engine.iconUrl;
 		// if not a data link already, try downloading the image and cache it as one
-		if (!engine.iconUrl.startsWith("data:")) {
+		if (engine.iconUrl && !cached && !engine.iconUrl.startsWith("data:")) {
 			getDataUriFromImgUrl(engine.iconUrl, base64Img => {
 				icon.src = base64Img;
 				settings.searchEnginesCache[engine.iconUrl] = base64Img;
@@ -1797,6 +1798,9 @@ namespace SSS_Settings
 	function getIconUrlFromSearchUrl(url)
 	{
 		if (settings.searchEngineIconsSource === SSS.SearchEngineIconsSource.FaviconKit) {
+			const original = defaultSettings.searchEngines.find(engine => engine.type === SSS.SearchEngineType.Custom
+				&& (engine as SSS.SearchEngine_Custom).searchUrl === url) as SSS.SearchEngine_Custom;
+			if (original) return original.iconUrl;
 			return "https://api.faviconkit.com/" + getDomainFromUrl(url) + "/64";
 		} else {
 			return "";

@@ -77,3 +77,43 @@ Extract the generated Chrome ZIP, open `chrome://extensions`, enable Developer
 mode, choose **Load unpacked**, and select the extracted directory. Keep this
 directory in place; load the directory rather than the ZIP itself. Use the
 extension's **Extension options** page for configuration.
+
+## HiDPI default search-engine icons
+
+Verified on 2026-11-08 by downloading and reading the PNG headers. All default
+engines, including disabled examples, use sources at least 96 pixels square.
+Google and the example site-search engine share the Google asset.
+
+The original PNGs are bundled under `res/default-engine-icons` and used as the
+default cache, avoiding network requests while opening the popup. Existing engine
+records are migrated only when both their search URL and old default icon URL
+match; custom icon URLs and engine identities/order/enabled state are preserved.
+Generic downloaded-icon caching now retains up to 192 pixels instead of 48.
+
+eBay uses the developer-published artwork from its official App Store listing
+(ID 282614216), served by Apple's image CDN. Bing, Baidu and Amazon use transparent
+192 x 192 PNG icons from Icons8; Wikipedia uses the 250 x 250 Wikimedia Commons
+SuperTinyIcons render; other sources are the brands' websites/CDNs. No favicon
+aggregation service is used.
+
+Gemini 3.8 Flash (Medium) reviewed the tracked code/test changes; the 13 new PNGs
+were separately decoded, dimension-checked, visually inspected and loaded in real
+Chrome/Firefox. Icon-source `None` continues to disable automatic icon derivation
+when a URL is cleared. Legacy cache keys are retained because custom engines may
+still reference them; migration tests verify those references remain usable.
+
+| Engine | Verified dimensions | Source URL |
+| --- | --- | --- |
+| Google | 192 x 192 | [PNG](https://www.gstatic.com/images/branding/product/2x/googleg_96dp.png) |
+| Bing | 192 x 192 | [PNG](https://img.icons8.com/fluency/192/bing.png) |
+| DuckDuckGo | 256 x 256 | [PNG](https://duckduckgo.com/static-assets/favicons/DDG-icon_256x256.png) |
+| Yandex.ru | 192 x 192 | [PNG](https://yastatic.net/s3/home-static/_/f0/f0597b6727cc67dceebc4e3a87caf571.png) |
+| Baidu | 192 x 192 | [PNG](https://img.icons8.com/color/192/baidu.png) |
+| YouTube | 192 x 192 | [PNG](https://www.gstatic.com/youtube/img/branding/favicon/favicon_192x192_v2.png) |
+| IMDb | 1000 x 1000 | [PNG](https://m.media-amazon.com/images/G/01/imdb/images/social/imdb_logo.png) |
+| Wikipedia | 120 x 120 | [PNG](https://upload.wikimedia.org/wikipedia/commons/thumb/3/34/Wikipedia_W_-_SuperTinyIcons.svg/120px-Wikipedia_W_-_SuperTinyIcons.svg.png) |
+| Amazon.com | 192 x 192 | [PNG](https://img.icons8.com/color/192/amazon.png) |
+| eBay.com | 128 x 128 | [PNG](https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/eb/0f/bc/eb0fbce7-3dbb-8931-2614-cd2975765fe3/AppIcon-0-0-1x_U007epad-0-1-0-85-220.png/128x128bb.png) |
+| Translate to EN | 192 x 192 | [PNG](https://www.gstatic.com/images/branding/product/2x/translate_96dp.png) |
+| Google Maps | 192 x 192 | [PNG](https://www.gstatic.com/images/branding/product/2x/maps_96dp.png) |
+| Steam | 114 x 114 | [PNG](https://store.steampowered.com/apple-touch-icon.png) |

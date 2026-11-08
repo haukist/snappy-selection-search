@@ -55,6 +55,7 @@ def main():
             options = Options()
             options.binary_location = args.firefox
             options.add_argument('-headless')
+            options.set_preference('layout.css.devPixelsPerPx', '2.0')
             options.set_preference('extensions.webextensions.uuids', json.dumps({extension_id: uuid}))
             with webdriver.Firefox(options=options, service=Service(args.geckodriver, service_args=['--allow-system-access'])) as driver:
                 driver.install_addon(str(addon), temporary=True)
@@ -65,6 +66,26 @@ def main():
                 wait = WebDriverWait(driver, 20)
                 wait.until(lambda d: d.execute_script("return document.querySelector('#engines')?.children.length > 0 && getComputedStyle(document.body).display !== 'none'"))
                 print('PASS: actual Firefox MV2 background and options initialize')
+                icon_sizes = driver.execute_async_script("""
+const done = arguments[arguments.length-1];
+(async () => {
+    const data = await browser.runtime.sendMessage({type:'getDataForSettingsPage'});
+    const defaults = data.defaultSettings;
+    const engines = defaults.searchEngines.filter(engine => engine.type === 'custom');
+    const sizes = await Promise.all(engines.map(engine => new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve({name:engine.name, width:image.naturalWidth, height:image.naturalHeight});
+        image.onerror = () => reject(new Error(engine.name));
+        image.src = defaults.searchEnginesCache[engine.iconUrl];
+    })));
+    done({sizes, ratio:devicePixelRatio});
+})().catch(error => done({error:String(error)}));
+""")
+                assert 'error' not in icon_sizes, icon_sizes
+                assert len(icon_sizes['sizes']) == 14
+                assert all(min(icon['width'], icon['height']) >= 96 for icon in icon_sizes['sizes'])
+                assert abs(icon_sizes['ratio'] - 2) < .01
+                print('PASS: actual Firefox loads all 14 default engine images at 96px+ on a 2x display')
                 config = {'popupDelay': 0, 'popupAnimationDuration': 0, 'shortcutBehaviour': 'new-bg-tab',
                           'searchEngines': [{'type': 'custom', 'uniqueId': 'local', 'name': 'Local', 'shortcut': 'G',
                                              'searchUrl': origin + '/search?q={searchTerms}', 'iconUrl': '',
