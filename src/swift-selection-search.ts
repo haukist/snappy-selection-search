@@ -283,7 +283,7 @@ namespace SSS
 		ebay: { legacyUrl: "https://www.ebay.com/favicon.ico", url: "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/eb/0f/bc/eb0fbce7-3dbb-8931-2614-cd2975765fe3/AppIcon-0-0-1x_U007epad-0-1-0-85-220.png/128x128bb.png", file: "ebay.png" },
 		translate: { legacyUrl: "https://translate.google.com/favicon.ico", url: "https://www.gstatic.com/images/branding/product/2x/translate_96dp.png", file: "translate.png" },
 		maps: { legacyUrl: "https://www.google.com/images/branding/product/ico/maps15_bnuw3a_32dp.ico", url: "https://www.gstatic.com/images/branding/product/2x/maps_96dp.png", file: "maps.png" },
-		steam: { legacyUrl: "https://store.steampowered.com/favicon.ico", url: "https://store.steampowered.com/apple-touch-icon.png", file: "steam.png" },
+		steam: { legacyUrl: "https://store.steampowered.com/favicon.ico", url: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/83/Steam_icon_logo.svg/120px-Steam_icon_logo.svg.png", file: "steam.png" },
 	};
 
 	function createDefaultIconCache(): { [url: string]: string } {
