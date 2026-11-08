@@ -812,19 +812,21 @@ namespace PopupCreator
 					color-scheme: light;
 					--sss-background: ${background};
 					--sss-text: #202124;
-					--sss-input-background: #ffffff;
-					--sss-input-border: #cccccc;
+					--sss-input-background: color-mix(in srgb, var(--sss-background), #000 7%);
+					--sss-input-hover-background: color-mix(in srgb, var(--sss-background), #000 11%);
 					--sss-action-filter: none;
+					--sss-shadow: 0 1px 2px rgba(0, 0, 0, 0.30), 0 2px 6px 2px rgba(0, 0, 0, 0.15), 0 4px 12px rgba(0, 0, 0, 0.10);
+					--sss-focus-ring: ${settings.popupHighlightColor};
 					font-size: 0px !important;
 					direction: ltr !important;
 					position: absolute;
 					z-index: 2147483647;
 					user-select: none;
 					-moz-user-select: none;
-					box-shadow: rgba(0, 0, 0, 0.5) 0px 0px 3px;
+					box-shadow: var(--sss-shadow);
 					background-color: var(--sss-background);
 					color: var(--sss-text);
-					border-radius: ${settings.popupBorderRadius}px;
+					border-radius: ${Math.max(settings.popupBorderRadius, 12)}px;
 					padding: ${settings.popupPaddingY}px ${settings.popupPaddingX}px;
 					text-align: center;
 					${this.generateStylesheet_Width(settings)}
@@ -834,8 +836,19 @@ namespace PopupCreator
 					width: ${settings.popupItemSize}px;
 					height: ${settings.popupItemSize}px;
 					padding: ${3 + settings.popupItemVerticalPadding}px ${settings.popupItemPadding}px;
-					border-radius: ${settings.popupItemBorderRadius}px;
+					box-sizing: content-box;
+					border-radius: ${Math.max(settings.popupItemBorderRadius, 8)}px;
 					cursor: pointer;
+					transition: background-color 150ms cubic-bezier(0.2, 0, 0, 1), transform 150ms cubic-bezier(0.2, 0, 0, 1);
+				}
+
+				.sss-content img:focus-visible {
+					outline: 2px solid var(--sss-focus-ring);
+					outline-offset: -2px;
+				}
+
+				.sss-content img:active {
+					background-color: color-mix(in srgb, ${settings.popupHighlightColor} 28%, transparent);
 				}
 
 				.sss-content img:hover {
@@ -857,17 +870,20 @@ namespace PopupCreator
 				.sss-input-field {
 					box-sizing: border-box;
 					width: calc(100% - 8px);
-					border: 1px solid var(--sss-input-border);
+					border: none;
 					background-color: var(--sss-input-background);
 					color: var(--sss-text);
-					caret-color: var(--sss-text);
-					border-radius: ${settings.popupBorderRadius}px;
-					padding: 4px 7px;
-					margin: 4px 0px 2px 0px;
+					caret-color: var(--sss-focus-ring);
+					font: 14px/20px Roboto, "Segoe UI", system-ui, sans-serif !important;
+					border-radius: 999px;
+					padding: 6px 14px;
+					margin: 4px 0px 4px 0px;
+					outline: none;
+					transition: background-color 150ms;
 				}
 
 				.sss-input-field:hover, .sss-input-field:focus {
-					border: 1px solid ${settings.popupHighlightColor};
+					background-color: var(--sss-input-hover-background);
 				}
 
 				${useDefaultBackground ? `@media (prefers-color-scheme: dark) {
@@ -875,8 +891,9 @@ namespace PopupCreator
 						color-scheme: dark;
 						--sss-background: #25272b;
 						--sss-text: #f1f3f4;
-						--sss-input-background: #35383d;
-						--sss-input-border: #60656d;
+						--sss-input-background: color-mix(in srgb, var(--sss-background), #000 30%);
+						--sss-input-hover-background: color-mix(in srgb, var(--sss-background), #000 40%);
+						--sss-shadow: 0 1px 3px rgba(0, 0, 0, 0.60), 0 4px 8px 3px rgba(0, 0, 0, 0.35);
 						--sss-action-filter: invert(1);
 					}
 				}` : ""}
@@ -926,19 +943,10 @@ namespace PopupCreator
 			if (settings.popupItemHoverBehaviour === SSS.ItemHoverBehaviour.Highlight
 			 || settings.popupItemHoverBehaviour === SSS.ItemHoverBehaviour.HighlightAndMove)
 			{
-				let borderCompensation;
-				if (settings.popupItemHoverBehaviour === SSS.ItemHoverBehaviour.HighlightAndMove) {
-					const marginTopValue = Math.min(-3 - settings.popupItemVerticalPadding + 2, -2);	// equal or less than -2 to counter the border's 2px
-					borderCompensation = `margin-top: ${marginTopValue}px;`;
-				} else {
-					const paddingBottomValue = Math.max(3 + settings.popupItemVerticalPadding - 2, 0);	// must be positive to counter the border's 2px
-					borderCompensation = `padding-bottom: ${paddingBottomValue}px;`;
-				}
-
+				// Material state layer: translucent tint of the highlight color
 				return `
-					border-bottom: 2px ${settings.popupHighlightColor} solid;
-					border-radius: ${settings.popupItemBorderRadius == 0 ? 2 : settings.popupItemBorderRadius}px;
-					${borderCompensation}
+					background-color: color-mix(in srgb, ${settings.popupHighlightColor} 16%, transparent);
+					${settings.popupItemHoverBehaviour === SSS.ItemHoverBehaviour.HighlightAndMove ? "transform: translateY(-2px);" : ""}
 				`;
 			}
 			else if (settings.popupItemHoverBehaviour === SSS.ItemHoverBehaviour.Scale)

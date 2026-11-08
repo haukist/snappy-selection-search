@@ -249,13 +249,13 @@ namespace SSS
 		copyToClipboard: {
 			name: "Copy to clipboard",
 			description: "[SSS] Adds a \"Copy selection to clipboard\" icon to the popup.",
-			iconPath: "res/sss-engine-icons/copy.png",
+			iconPath: "res/sss-engine-icons/copy.svg",
 			isInteractive: true,
 		},
 		openAsLink: {
 			name: "Open as link",
 			description: "[SSS] Adds an \"Open selection as link\" icon to the popup.",
-			iconPath: "res/sss-engine-icons/open-link.png",
+			iconPath: "res/sss-engine-icons/open-link.svg",
 			isInteractive: true,
 		},
 		separator: {
@@ -335,8 +335,8 @@ namespace SSS
 		popupItemBorderRadius: 0,
 		popupBackgroundColor: "#FFFFFF",
 		popupHighlightColor: "#3399FF",
-		popupPaddingX: 3,
-		popupPaddingY: 1,
+		popupPaddingX: 4,
+		popupPaddingY: 4,
 		popupOffsetX: 0,
 		popupOffsetY: 0,
 		popupBorderRadius: 4,
