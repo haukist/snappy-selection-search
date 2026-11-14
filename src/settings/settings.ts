@@ -1807,11 +1807,11 @@ namespace SSS_Settings
 
 	function getIconUrlFromSearchUrl(url)
 	{
-		if (settings.searchEngineIconsSource === SSS.SearchEngineIconsSource.FaviconKit) {
+		if (settings.searchEngineIconsSource === SSS.SearchEngineIconsSource.Google) {
 			const original = defaultSettings.searchEngines.find(engine => engine.type === SSS.SearchEngineType.Custom
 				&& (engine as SSS.SearchEngine_Custom).searchUrl === url) as SSS.SearchEngine_Custom;
 			if (original) return original.iconUrl;
-			return "https://api.faviconkit.com/" + getDomainFromUrl(url) + "/64";
+			return "https://www.google.com/s2/favicons?domain=" + encodeURIComponent(getDomainFromUrl(url)) + "&sz=64";
 		} else {
 			return "";
 		}

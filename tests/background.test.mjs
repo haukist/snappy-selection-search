@@ -261,4 +261,6 @@ test('legacy default icon URLs migrate without changing engine identities or cus
   assert.deepEqual(restarted.stored(), stored);
   const imported = await current.message('runBackwardsCompatibilityUpdates', { settings });
   assert.equal(imported.searchEngines.find(engine => engine.name === 'Google').iconUrl, expected.get(google.uniqueId));
+  const migratedIconsSource = await current.message('runBackwardsCompatibilityUpdates', { settings: { ...structuredClone(settings), searchEngineIconsSource: 'favicon-kit' } });
+  assert.equal(migratedIconsSource.searchEngineIconsSource, 'google');
 });
