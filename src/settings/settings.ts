@@ -631,7 +631,7 @@ namespace SSS_Settings
 
 			const saveDesc = page.saveSettingsToSyncButton?.closest(".setting")?.querySelector(".setting-description");
 			if (saveDesc) {
-				saveDesc.innerHTML = 'Saves all SSS options and engines in browser sync. This does not force upload, so you may have to wait for your browser to sync. <span class="warn-when-over-storage-limit">Beware that storage size should be below 100KB for this to work. If above the limit, start by deleting any "data:image" URLs in your engines, or any other extremely long URLs.</span> Estimate size is not exact, so it may still work if above the limit, or fail if below it.';
+				saveDesc.innerHTML = 'Saves all SSS options and engines in browser sync. This does not force upload, so you may have to wait for your browser to sync. Syncing only happens if you are signed in to your browser and sync of extensions is enabled. <span class="warn-when-over-storage-limit">Beware that storage size should be below 100KB for this to work. If above the limit, start by deleting any "data:image" URLs in your engines, or any other extremely long URLs.</span> Estimate size is not exact, so it may still work if above the limit, or fail if below it.';
 			}
 			const loadDesc = page.loadSettingsFromSyncButton?.closest(".setting")?.querySelector(".setting-description");
 			if (loadDesc) {
@@ -777,7 +777,7 @@ namespace SSS_Settings
 		};
 
 		// saves settings to Firefox Sync
-		page.saveSettingsToSyncButton.onclick = _ => {
+		page.saveSettingsToSyncButton.onclick = async _ => {
 			if (DEBUG) { log("saving!"); }
 
 			// remove useless stuff that doesn't need to be stored
@@ -790,12 +790,28 @@ namespace SSS_Settings
 				chunks["p"+chunkIndex] = settingsStr.substring(i, i + 1000);
 			}
 
-			browser.storage.sync.clear();
-			browser.storage.sync.set(chunks).then(
-				() => { if (DEBUG) { log("All settings and engines were saved in Sync!"); } },
-				() => { if (DEBUG) { log("Uploading to Sync failed! Is your network working? Are you under the 100KB size limit?"); } }
-			);
-			if (DEBUG) { log("saved in sync!", chunks); }
+			// write the new chunks first and only then remove leftover chunks from an older, larger save,
+			// so that a failed upload (e.g. quota exceeded) doesn't wipe the previously synced data
+			// (the button is disabled meanwhile so that overlapping saves can't delete each other's chunks)
+			page.saveSettingsToSyncButton.disabled = true;
+			try {
+				const existingKeys = Object.keys(await browser.storage.sync.get(null));
+				await browser.storage.sync.set(chunks);
+
+				// leftover chunks are harmless (parseSyncChunksList copes with them), so failing to remove them is not an error
+				const staleKeys = existingKeys.filter(key => !Object.prototype.hasOwnProperty.call(chunks, key));
+				if (staleKeys.length > 0) {
+					await browser.storage.sync.remove(staleKeys).catch(error => {
+						if (DEBUG) { log("Saved new chunks in Sync, but failed to remove old ones.", error); }
+					});
+				}
+				if (DEBUG) { log("All settings and engines were saved in Sync!", chunks); }
+			} catch (error) {
+				if (DEBUG) { log("Uploading to Sync failed!", error); }
+				alert("Saving to sync failed. Your previously synced data was not changed. Check that you are under the 100KB size limit and that your browser's sync is available.");
+			} finally {
+				page.saveSettingsToSyncButton.disabled = false;
+			}
 		};
 
 		// buttons with confirmation
@@ -869,7 +885,8 @@ namespace SSS_Settings
 		// (For example if the last save uploaded only chunks p0 and p1, but Sync already had chunks p0, p1 AND p2 in there.)
 		// Due to this, parsing the concatenated chunks would result in JSON errors, so if they happen we try removing the last chunks
 		// one by one until parsing works.
-		// The origin of the bug was fixed by clearing all Sync storage before setting new data.
+		// The origin of the bug was fixed by removing the leftover chunks after setting new data (we used to clear all Sync storage first,
+		// but that wiped the previous data if the upload failed). If removing them fails, this fallback still handles the leftovers.
 		let settingsStr: string = "";
 		let parsedSettings = null;
 
