@@ -161,13 +161,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 		color: #3399FF;
 		cursor: pointer;
 	}
-	.setting-reset {
-		visibility: hidden;
-		min-width: 65px;
-	}
-	.setting:hover .setting-reset {
-		visibility: visible;
-	}
 	.setting.disabled .setting-value {
 		font-size: 0.8rem;
 	}
@@ -720,7 +713,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 				</div>
 				<div class="setting-description">Imports the search engines that you usually use in the browser's search bar.
 					<br><br>NOTE: These engines are managed by Firefox and so they can't use some SSS settings. For example, browser engines only respect "Open in this tab" or "Open in new tab" (other click behaviours behave as "Open in new tab").</div>
-				<div class="setting-reset"></div>
 			</div>
 
 			<div class="setting">
@@ -729,7 +721,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					<input type="button" name="resetSearchEnginesButton" value="Reset engines">
 				</div>
 				<div class="setting-description">Resets search engines to the defaults (as if running SSS for the first time).</div>
-				<div class="setting-reset"></div>
 			</div>
 
 			<div class="setting">
@@ -741,7 +732,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					</select>
 				</div>
 				<div class="setting-description">Defines the origin of automatic search engine icons when you add a new engine. Change this option if you have privacy concerns or would prefer to add all icons yourself.</div>
-				<div class="setting-reset"><input type="button" value="Default"></div>
 			</div>
 		</div>
 	</div>
@@ -762,7 +752,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					</select>
 				</div>
 				<div class="setting-description">When to open the popup.</div>
-				<div class="setting-reset"><button type="button" class="m3e-button m3e-button--text">Default</button></div>
 			</div>
 
 			<div class="setting hidden indent">
@@ -776,7 +765,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					</div>
 				</div>
 				<div class="setting-description">Adds a margin in pixels so you can middle-click near the selection as well as on it.</div>
-				<div class="setting-reset"><button type="button" class="m3e-button m3e-button--text">Default</button></div>
 			</div>
 
 			<div class="setting hidden indent">
@@ -790,7 +778,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					</div>
 				</div>
 				<div class="setting-description">In "Auto" opening behaviour, only shows popup if you have at least this number of characters selected (discarding surrounding spaces). Setting to 0 always shows.</div>
-				<div class="setting-reset"><button type="button" class="m3e-button m3e-button--text">Default</button></div>
 			</div>
 
 			<div class="setting hidden indent">
@@ -804,7 +791,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					</div>
 				</div>
 				<div class="setting-description">In "Auto" opening behaviour, only shows popup if you have a maximum of this number of characters selected (discarding surrounding spaces). Setting to 0 always shows.</div>
-				<div class="setting-reset"><button type="button" class="m3e-button m3e-button--text">Default</button></div>
 			</div>
 
 			<div class="setting hidden indent">
@@ -818,7 +804,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					</div>
 				</div>
 				<div class="setting-description">Number of milliseconds to delay the popup when selecting text. It can avoid wrong clicks if you usually triple click to select paragraphs.</div>
-				<div class="setting-reset"><button type="button" class="m3e-button m3e-button--text">Default</button></div>
 			</div>
 
 			<div class="setting">
@@ -830,7 +815,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					</select>
 				</div>
 				<div class="setting-description">Where the popup should appear after selecting text.</div>
-				<div class="setting-reset"><button type="button" class="m3e-button m3e-button--text">Default</button></div>
 			</div>
 
 			<div class="setting">
@@ -847,7 +831,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					</select>
 				</div>
 				<div class="setting-description">What to do when a search engine is clicked with the left mouse button.</div>
-				<div class="setting-reset"><button type="button" class="m3e-button m3e-button--text">Default</button></div>
 			</div>
 
 			<div class="setting">
@@ -864,7 +847,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					</select>
 				</div>
 				<div class="setting-description">What to do when a search engine is clicked with the right mouse button.</div>
-				<div class="setting-reset"><button type="button" class="m3e-button m3e-button--text">Default</button></div>
 			</div>
 
 			<div class="setting">
@@ -881,7 +863,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					</select>
 				</div>
 				<div class="setting-description">What to do when a search engine is clicked with the middle mouse button.</div>
-				<div class="setting-reset"><button type="button" class="m3e-button m3e-button--text">Default</button></div>
 			</div>
 
 			<div class="setting">
@@ -898,7 +879,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					</select>
 				</div>
 				<div class="setting-description">What to do when searching via shortcut. Also applies when selecting the engine with the TAB key.</div>
-				<div class="setting-reset"><button type="button" class="m3e-button m3e-button--text">Default</button></div>
 			</div>
 
 			<div class="setting">
@@ -910,7 +890,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					</label>
 				</div>
 				<div class="setting-description">Show the popup when text is selected with the mouse on an editable text field, such as a login form, a search bar, or an email composing window. NOTE: "Shortcut to open popup" ignores this option and always works on editable fields.</div>
-				<div class="setting-reset"><button type="button" class="m3e-button m3e-button--text">Default</button></div>
 			</div>
 
 			<div class="setting">
@@ -922,7 +901,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					</label>
 				</div>
 				<div class="setting-description">Hides the popup when the page moves.</div>
-				<div class="setting-reset"><button type="button" class="m3e-button m3e-button--text">Default</button></div>
 			</div>
 
 			<div class="setting">
@@ -934,7 +912,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					</label>
 				</div>
 				<div class="setting-description">Hides the popup when the right mouse button is pressed outside of the popup. NOTE: Left or middle clicks always hide it regardless.</div>
-				<div class="setting-reset"><button type="button" class="m3e-button m3e-button--text">Default</button></div>
 			</div>
 
 			<div class="setting">
@@ -946,7 +923,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					</label>
 				</div>
 				<div class="setting-description">Hides the popup when a search engine is clicked. This also applies when using shortcuts.</div>
-				<div class="setting-reset"><button type="button" class="m3e-button m3e-button--text">Default</button></div>
 			</div>
 
 			<div class="setting">
@@ -959,7 +935,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 				</div>
 				<div class="setting-description">Enables search engine shortcuts even if the popup is not visible.<br>
 					NOTE: A shortcut will not work if the engine is not enabled for the popup (even though the popup isn't needed). They also won't work when writing in an editable field.</div>
-				<div class="setting-reset"><button type="button" class="m3e-button m3e-button--text">Default</button></div>
 			</div>
 
 			<div class="setting">
@@ -970,7 +945,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					<br>
 					Default value is Ctrl+Shift+Space (NOTE: for Mac, Ctrl means Command).
 				</div>
-				<div class="setting-reset"></div>
 			</div>
 
 			<div class="setting">
@@ -981,7 +955,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					<br>
 					Default value is Ctrl+Shift+U (NOTE: for Mac, Ctrl means Command).
 				</div>
-				<div class="setting-reset"></div>
 			</div>
 
 			<div class="setting">
@@ -995,7 +968,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					</div>
 				</div>
 				<div class="setting-description">Duration of popup animation, in milliseconds. Use 0 to make the popup show instantly.</div>
-				<div class="setting-reset"><button type="button" class="m3e-button m3e-button--text">Default</button></div>
 			</div>
 
 			<div class="setting">
@@ -1008,7 +980,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					</select>
 				</div>
 				<div class="setting-description">Automatically copy selected text to clipboard when popup opens.</div>
-				<div class="setting-reset"><button type="button" class="m3e-button m3e-button--text">Default</button></div>
 			</div>
 
 			<div class="setting">
@@ -1036,8 +1007,10 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 						</div>
 					</details>
 				</div>
-				<div class="setting-reset"><button type="button" class="m3e-button m3e-button--text">Default</button></div>
 			</div>
+		</div>
+		<div class="section-footer">
+			<button type="button" class="m3e-button m3e-button--tonal section-reset-button">Reset to default</button>
 		</div>
 	</div>
 
@@ -1051,7 +1024,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					<input class="setting-input" type="checkbox" name="showSelectionTextField" autocomplete="off" checked>
 				</div>
 				<div class="setting-description">Shows a text box with the current text selection in the popup. Useful to make edits to the text before searching with one of the engines.</div>
-				<div class="setting-reset"><input type="button" value="Default"></div>
 			</div>
 
 			<div class="setting hidden indent">
@@ -1063,7 +1035,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					</select>
 				</div>
 				<div class="setting-description">Location of the text field in the popup, above or below the search engines.</div>
-				<div class="setting-reset"><input type="button" value="Default"></div>
 			</div>
 
 			<div class="setting">
@@ -1072,7 +1043,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					<input class="setting-input" type="checkbox" name="useSingleRow" autocomplete="off" checked>
 				</div>
 				<div class="setting-description">Places all search engines in a single row, instead of a grid.</div>
-				<div class="setting-reset"><input type="button" value="Default"></div>
 			</div>
 
 			<div class="setting hidden indent">
@@ -1081,7 +1051,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					<input class="setting-input" type="number" name="nPopupIconsPerRow" min="1">
 				</div>
 				<div class="setting-description">Max number of search engines per row in grid display.</div>
-				<div class="setting-reset"><input type="button" value="Default"></div>
 			</div>
 
 			<div class="setting hidden indent">
@@ -1094,7 +1063,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					</select>
 				</div>
 				<div class="setting-description">Specifies how to align icons when a row is not full in grid display.</div>
-				<div class="setting-reset"><input type="button" value="Default"></div>
 			</div>
 
 			<div class="setting">
@@ -1103,7 +1071,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					<input class="setting-input" type="number" name="popupItemSize" min="0">
 				</div>
 				<div class="setting-description">Search engine icon size in pixels.</div>
-				<div class="setting-reset"><input type="button" value="Default"></div>
 			</div>
 
 			<div class="setting">
@@ -1112,7 +1079,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					<input class="setting-input" type="number" name="popupSeparatorWidth" min="0">
 				</div>
 				<div class="setting-description">Separator icon width as a percentage of icon size.</div>
-				<div class="setting-reset"><input type="button" value="Default"></div>
 			</div>
 
 			<div class="setting">
@@ -1121,7 +1087,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					<input class="setting-input" type="number" name="popupItemPadding" min="0">
 				</div>
 				<div class="setting-description">Search engine icon horizontal padding (left and right) in pixels.</div>
-				<div class="setting-reset"><input type="button" value="Default"></div>
 			</div>
 
 			<div class="setting">
@@ -1130,7 +1095,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					<input class="setting-input" type="number" name="popupItemVerticalPadding" min="0">
 				</div>
 				<div class="setting-description">Search engine icon vertical padding (top and bottom) in pixels.</div>
-				<div class="setting-reset"><input type="button" value="Default"></div>
 			</div>
 
 			<div class="setting">
@@ -1144,7 +1108,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					</select>
 				</div>
 				<div class="setting-description">What happens to hovered search engine icons.</div>
-				<div class="setting-reset"><input type="button" value="Default"></div>
 			</div>
 
 			<div class="setting">
@@ -1153,7 +1116,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					<input class="setting-input" type="number" name="popupItemBorderRadius" min="0">
 				</div>
 				<div class="setting-description">Icon border radius in pixels. Makes icons more or less round. NOTE: this will likely be unnoticeable on icons without a background.</div>
-				<div class="setting-reset"><input type="button" value="Default"></div>
 			</div>
 
 			<div class="setting">
@@ -1163,7 +1125,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					<input class="setting-input" type="text" name="popupBackgroundColor">
 				</div>
 				<div class="setting-description">Color for the popup background. Supports transparency using #rrggbbaa.</div>
-				<div class="setting-reset"><input type="button" value="Default"></div>
 			</div>
 
 			<div class="setting">
@@ -1173,7 +1134,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					<input class="setting-input" type="text" name="popupHighlightColor">
 				</div>
 				<div class="setting-description">Color for the popup highlight. Supports transparency using #rrggbbaa.</div>
-				<div class="setting-reset"><input type="button" value="Default"></div>
 			</div>
 
 			<div class="setting">
@@ -1182,7 +1142,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					<input class="setting-input" type="number" name="popupPaddingX" min="0">
 				</div>
 				<div class="setting-description">Popup left/right padding, in pixels.</div>
-				<div class="setting-reset"><input type="button" value="Default"></div>
 			</div>
 
 			<div class="setting">
@@ -1191,7 +1150,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					<input class="setting-input" type="number" name="popupPaddingY" min="0">
 				</div>
 				<div class="setting-description">Popup top/bottom padding, in pixels.</div>
-				<div class="setting-reset"><input type="button" value="Default"></div>
 			</div>
 
 			<div class="setting">
@@ -1200,7 +1158,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					<input class="setting-input" type="number" name="popupOffsetX">
 				</div>
 				<div class="setting-description">Popup horizontal offset from the default position, in pixels (positive values move right).</div>
-				<div class="setting-reset"><input type="button" value="Default"></div>
 			</div>
 
 			<div class="setting">
@@ -1209,7 +1166,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					<input class="setting-input" type="number" name="popupOffsetY">
 				</div>
 				<div class="setting-description">Popup vertical offset from the default position, in pixels (positive values move up).</div>
-				<div class="setting-reset"><input type="button" value="Default"></div>
 			</div>
 
 			<div class="setting">
@@ -1218,7 +1174,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					<input class="setting-input" type="number" name="popupBorderRadius" min="0">
 				</div>
 				<div class="setting-description">Popup border radius in pixels. Makes popup more or less round.</div>
-				<div class="setting-reset"><input type="button" value="Default"></div>
 			</div>
 
 			<div class="setting">
@@ -1230,7 +1185,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 				<br>
 				<br>
 				NOTE: If the popup's internal CSS changes in any future update, this option may disable itself to avoid problems.</div>
-				<div class="setting-reset"><input type="button" value="Default"></div>
 			</div>
 
 			<div class="setting hidden indent">
@@ -1239,8 +1193,10 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					<textarea class="setting-input" name="customPopupCSS" style="font-size: 12px;"></textarea>
 				</div>
 				<div class="setting-description"></div>
-				<div class="setting-reset"><input type="button" value="Default"></div>
 			</div>
+		</div>
+		<div class="section-footer">
+			<button type="button" class="m3e-button m3e-button--tonal section-reset-button">Reset to default</button>
 		</div>
 	</div>
 
@@ -1254,7 +1210,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					<input class="setting-input" type="checkbox" name="enableEnginesInContextMenu" autocomplete="off" checked>
 				</div>
 				<div class="setting-description">Enables a "Search for..." context menu with your search engines. Appears when you right click the page while having text selected.</div>
-				<div class="setting-reset"><input type="button" value="Default"></div>
 			</div>
 
 			<div class="setting">
@@ -1272,7 +1227,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 				</div>
 				<div class="setting-description">What to do when a search engine is left clicked in the context menu.
 					<br>NOTE: For popup click options, please look in the "Popup/icons behaviour" section.</div>
-				<div class="setting-reset"><input type="button" value="Default"></div>
 			</div>
 
 			<div class="setting">
@@ -1290,7 +1244,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 				</div>
 				<div class="setting-description">What to do when a search engine is right clicked in the context menu.
 					<br>NOTE: For popup click options, please look in the "Popup/icons behaviour" section.</div>
-				<div class="setting-reset"><input type="button" value="Default"></div>
 			</div>
 
 			<div class="setting">
@@ -1308,7 +1261,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 				</div>
 				<div class="setting-description">What to do when a search engine is middle clicked in the context menu.
 					<br>NOTE: For popup click options, please look in the "Popup/icons behaviour" section.</div>
-				<div class="setting-reset"><input type="button" value="Default"></div>
 			</div>
 
 			<div class="setting">
@@ -1317,8 +1269,10 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					<input class="setting-input" type="text" name="contextMenuString">
 				</div>
 				<div class="setting-description">Title for the SSS submenu in the context menu. If you use %s somewhere in the title, it will be replaced by whatever text is selected when the context menu opens.</div>
-				<div class="setting-reset"><input type="button" value="Default"></div>
 			</div>
+		</div>
+		<div class="section-footer">
+			<button type="button" class="m3e-button m3e-button--tonal section-reset-button">Reset to default</button>
 		</div>
 	</div>
 
@@ -1334,7 +1288,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 				<div class="setting-description">
 					This is an estimate size of your SSS engines and options. <span class="warn-when-over-storage-limit">Engines with "data:image" icons tend to occupy a lot of space</span>. WARNING: Actual size will very likely be above or below the displayed value.
 				</div>
-				<div class="setting-reset"></div>
 			</div>
 
 			<div class="setting">
@@ -1345,7 +1298,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 				<div class="setting-description">
 					Saves all SSS options and engines in Firefox Sync. This does not force upload, so you may have to wait for Firefox to sync or force the sync yourself from Firefox's menu. <span class="warn-when-over-storage-limit">Beware that storage size should be below 100KB for this to work. If above the limit, start by deleting any "data:image" URLs in your engines, or any other extremely long URLs.</span> Estimate size is not exact, so it may still work if above the limit, or fail if below it.
 				</div>
-				<div class="setting-reset"></div>
 			</div>
 
 			<div class="setting">
@@ -1356,7 +1308,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 				<div class="setting-description">
 					Downloads previously saved SSS options and engines from Firefox Sync. This will override all existing options and engines!
 				</div>
-				<div class="setting-reset"></div>
 			</div>
 
 			<div class="setting">
@@ -1367,7 +1318,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 				<div class="setting-description">
 					Exports all SSS options and engines to a file.
 				</div>
-				<div class="setting-reset"></div>
 			</div>
 
 			<div class="setting">
@@ -1379,7 +1329,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 				<div class="setting-description">
 					Imports SSS options and engines from a file (previously exported). This will override all existing options and engines!
 				</div>
-				<div class="setting-reset"></div>
 			</div>
 		</div>
 	</div>
@@ -1394,7 +1343,6 @@ or loading the user settings, is provided by settings.ts and possibly some helpe
 					<input type="button" name="resetSettingsButton" value="Reset options">
 				</div>
 				<div class="setting-description">Resets all options except search engines to their defaults (as if running SSS for the first time).</div>
-				<div class="setting-reset"></div>
 			</div>
 		</div>
 	</div>

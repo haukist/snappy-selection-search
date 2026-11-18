@@ -225,23 +225,23 @@
 		body .header .header-page { display: none; }
 	}
 
-	/* settings rows: headline + supporting text on the left, control and reset on the right */
+	/* settings rows: headline + supporting text on the left, control on the right */
 
 	.setting {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) minmax(200px, 300px) 96px;
-		grid-template-areas: "name value reset" "desc value reset";
+		grid-template-columns: minmax(0, 1fr) minmax(200px, 300px);
+		grid-template-areas: "name value" "desc value";
 		align-items: center;
 		column-gap: 24px;
 		row-gap: 2px;
-		padding: 14px 16px 14px 24px;
+		padding: 14px 24px;
 		border: 0;
 		border-radius: var(--m3e-sys-shape-corner-extra-small);
 		background-color: var(--m3e-sys-color-surface-container-low);
 		transition: background-color var(--sss-spring-effects);
 	}
 	.setting:hover { background-color: var(--m3e-sys-color-surface-container); }
-	.setting:not(:has(> .setting-value)) { grid-template-areas: "name name name" "desc desc desc"; }
+	.setting:not(:has(> .setting-value)) { grid-template-areas: "name name" "desc desc"; }
 	.setting:has(> #engines-table) { display: block; padding: 12px; }
 
 	.setting-name {
@@ -275,12 +275,6 @@
 		width: auto;
 		max-width: none;
 		margin: 0;
-		display: flex;
-		justify-content: flex-end;
-	}
-	.setting-reset {
-		grid-area: reset;
-		min-width: 0;
 		display: flex;
 		justify-content: flex-end;
 	}
@@ -356,7 +350,6 @@
 	}
 	input[type=button]:not([name="toggleDarkMode"]):hover { border: 0; border-radius: var(--m3e-sys-shape-corner-medium); }
 	input[type=button]:disabled { opacity: 0.38; }
-	.setting-reset input[type=button] { background-color: transparent; color: var(--m3e-sys-color-primary); }
 	input[type=checkbox]:not([class*="m3e-"]) { accent-color: var(--m3e-sys-color-primary); inline-size: 18px; block-size: 18px; }
 	input[type=color] {
 		inline-size: 56px;
@@ -365,6 +358,31 @@
 		border: 1px solid var(--m3e-sys-color-outline);
 		border-radius: var(--m3e-sys-shape-corner-small);
 		background: transparent;
+	}
+	/* color rows: the swatch is as tall as the hex text field beside it (same 56px / outline / corners) */
+	.setting-value:has(> input[type=color]) { align-items: stretch; gap: 8px; }
+	.setting-value > input[type=color] {
+		flex: none;
+		block-size: auto;
+		min-block-size: 56px;
+		border-radius: var(--m3e-sys-shape-corner-extra-small);
+	}
+	.setting-value > input[type=color] + input { flex: 1 1 0; min-inline-size: 0; }
+
+	/* storage size: the one value shown as text, so it gets a prominent number */
+	#storage-size {
+		font-family: var(--m3e-sys-typescale-headline-medium-font);
+		font-size: var(--m3e-sys-typescale-headline-medium-size);
+		line-height: var(--m3e-sys-typescale-headline-medium-line-height);
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
+	}
+
+	/* "Reset to default" at the bottom of each section that has options */
+	.section-footer {
+		display: flex;
+		justify-content: flex-end;
+		padding-block: 16px 0;
 	}
 
 	pop, popm {
@@ -534,15 +552,14 @@
 
 	@media (max-width: 639px) {
 		.setting {
-			grid-template-columns: minmax(0, 1fr) auto;
-			grid-template-areas: "name reset" "desc desc" "value value";
+			grid-template-columns: minmax(0, 1fr);
+			grid-template-areas: "name" "desc" "value";
 			row-gap: 8px;
-			padding-inline-start: 16px;
+			padding-inline: 16px;
 		}
-		.setting:not(:has(> .setting-value)) { grid-template-areas: "name name" "desc desc"; }
+		.setting:not(:has(> .setting-value)) { grid-template-areas: "name" "desc"; }
 		.setting.indent { padding-inline-start: 32px; }
 		.setting-value { justify-content: flex-start; }
-		.setting-reset { visibility: visible; }
 		/* the engines table keeps its columns and scrolls sideways instead of squashing them */
 		#engines-table { overflow-x: auto; }
 		.engine-table-row { min-width: 720px; }

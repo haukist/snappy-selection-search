@@ -662,24 +662,34 @@ namespace SSS_Settings
 			});
 		};
 
-		// setup reset buttons for each option
+		// setup the "Reset to default" button at the bottom of each section, which resets all options in that section
 
-		for (const elem of document.querySelectorAll(".setting-reset"))
+		for (const resetButton of document.querySelectorAll(".section-reset-button") as NodeListOf<HTMLElement>)
 		{
-			const resetButton = elem.querySelector("input, button") as HTMLElement;
-			if (resetButton === null) continue;
-
 			resetButton.onclick = _ => {
-				const parent = elem.closest(".setting");
-				const formElement = parent.querySelector(".setting-input") as HTMLFormElement;
-				const settingName = formElement.name;
+				const section = resetButton.closest(".section");
+				const sectionName = section.querySelector(".section-name").textContent;
 
-				// register the change and save in storage
-				const defaultValue = defaultSettings[settingName];
-				settings[settingName] = defaultValue;
-				saveSettings({ [settingName]: defaultValue });
+				if (!confirm(`Really reset all options in "${sectionName}" to their default values?`)) return;
 
-				loadSettingValueIntoElement(formElement);
+				// register the changes and save in storage
+				const changes = {};
+				const formElements = section.querySelectorAll(".setting-input") as NodeListOf<HTMLFormElement>;
+
+				for (const formElement of formElements)
+				{
+					const settingName = formElement.name;
+					if (!(settingName in defaultSettings)) continue;
+
+					const defaultValue = defaultSettings[settingName];
+					settings[settingName] = defaultValue;
+					changes[settingName] = defaultValue;
+
+					loadSettingValueIntoElement(formElement);
+				}
+
+				saveSettings(changes);
+				calculateAndShowSettingsSize();
 			};
 		}
 
