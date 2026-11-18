@@ -82,7 +82,7 @@ try {
   record('unsupported Firefox engines are preserved in storage and excluded from popup');
   await options.reload();
   await options.waitForSelector('text=[Unsupported in Chrome]', { state: 'attached' });
-  await options.locator('#section_searchEngines .section-name').click();
+  await options.locator('.nav-item[data-section="section_searchEngines"]').click();
   assert.equal(await options.locator('text=[Unsupported in Chrome]').isVisible(), true);
   assert.equal(await options.locator('[name="importBrowserEnginesButton"]').isVisible(), false);
   record('options explicitly label imported Firefox engines as unsupported');
@@ -155,7 +155,7 @@ try {
   assert.equal(requests.length, baseline);
   record('synthetic keyboard and selection notifications cannot trigger a search');
   const downloadPromise = options.waitForEvent('download');
-  await options.locator('#section_storageAndBackup .section-name').click();
+  await options.locator('.nav-item[data-section="section_storageAndBackup"]').click();
   await options.locator('[name="exportSettingsToFileButton"]').click();
   const download = await downloadPromise;
   const exported = JSON.parse(await fs.readFile(await download.path(), 'utf8'));
@@ -314,7 +314,7 @@ try {
   await options.bringToFront();
   const googleIndex = layoutSettings.searchEngines.findIndex(engine => engine.name === 'Google');
   const googleIconField = options.locator('#engines > .engine-table-row').nth(googleIndex).locator('.engine-icon-link input');
-  if (!await googleIconField.isVisible()) await options.locator('#section_searchEngines .section-name').click();
+  if (!await googleIconField.isVisible()) await options.locator('.nav-item[data-section="section_searchEngines"]').click();
   await googleIconField.fill('');
   await googleIconField.press('Tab');
   await send('getPopupSettings');

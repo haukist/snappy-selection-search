@@ -19,6 +19,8 @@
     "webextension-polyfill": "^0.12.0"
   },
   "devDependencies": {
+    "@kyralabs/m3e-css": "^1.8.0",
+    "@kyralabs/m3e-tokens": "^1.8.0",
     "esbuild": "^0.28.2",
     "fflate": "^0.8.3",
     "playwright": "^1.65.0"

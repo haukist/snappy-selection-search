@@ -666,10 +666,10 @@ namespace SSS_Settings
 
 		for (const elem of document.querySelectorAll(".setting-reset"))
 		{
-			const inputElements = elem.querySelectorAll("input");
-			if (inputElements.length == 0) continue;
+			const resetButton = elem.querySelector("input, button") as HTMLElement;
+			if (resetButton === null) continue;
 
-			inputElements[0].onclick = _ => {
+			resetButton.onclick = _ => {
 				const parent = elem.closest(".setting");
 				const formElement = parent.querySelector(".setting-input") as HTMLFormElement;
 				const settingName = formElement.name;
@@ -683,20 +683,9 @@ namespace SSS_Settings
 			};
 		}
 
-		// sections' collapse/expand code
+		// side navigation: one section is shown at a time, picked from the nav (the URL hash names it)
 
-		for (const sectionNameElement of document.querySelectorAll(".section-name"))
-		{
-			// toggle entire section on clicking the title, and save in settings the resulting state (open/closed)
-			(sectionNameElement as HTMLElement).onclick = _ => {
-				if (settings.sectionsExpansionState === undefined) {
-					settings.sectionsExpansionState = {};
-				}
-				const isCollapsed = sectionNameElement.parentElement.classList.toggle("collapsed-section");
-				settings.sectionsExpansionState[sectionNameElement.parentElement.id] = !isCollapsed;
-				saveSettings({ sectionsExpansionState: settings.sectionsExpansionState });
-			};
-		}
+		setupSectionNavigation();
 
 		// show platform-specific sections (some info on the page is related to a specific OS and should only appear in that OS)
 
@@ -747,6 +736,8 @@ namespace SSS_Settings
 			} else {
 				document.body.classList.remove("dark");
 			}
+			// m3e theme tokens follow the system scheme unless data-theme forces one
+			document.documentElement.dataset.theme = enable ? "dark" : "light";
 		};
 
 		page.toggleDarkMode.onclick = _ => {
@@ -998,21 +989,57 @@ namespace SSS_Settings
 			});
 		}
 
-		// collapse or expand sections
-
-		if (settings.sectionsExpansionState !== undefined)
-		{
-			for (const sectionId of Object.keys(settings.sectionsExpansionState))
-			{
-				const classList = document.querySelector("#" + sectionId).classList;
-				const isExpanded = settings.sectionsExpansionState[sectionId];
-				classList.toggle("collapsed-section", !isExpanded);
-			}
-		}
-
 		// set dark/light mode
 
 		page.toggleDarkMode.setDarkModeState(settings.useDarkModeInOptionsPage);
+	}
+
+	const LAST_SECTION_STORAGE_KEY = "sss-options-last-section";
+
+	function setupSectionNavigation()
+	{
+		const sections = Array.from(document.querySelectorAll(".section")) as HTMLElement[];
+		const navItems = Array.from(document.querySelectorAll(".nav-item")) as HTMLAnchorElement[];
+
+		const sectionIdFromHash = () => location.hash.length > 1 ? "section_" + location.hash.slice(1) : null;
+
+		const showSection = (sectionId: string | null) => {
+			const section = sections.find(s => s.id === sectionId) ?? sections[0];
+
+			for (const s of sections) {
+				s.classList.toggle("active", s === section);
+			}
+			for (const item of navItems) {
+				const isCurrent = item.dataset.section === section.id;
+				item.classList.toggle("active", isCurrent);
+				if (isCurrent) {
+					item.setAttribute("aria-current", "page");
+					// keeps the item visible when the nav is a horizontally scrolling row (narrow windows)
+					item.scrollIntoView({ block: "nearest", inline: "nearest" });
+				} else {
+					item.removeAttribute("aria-current");
+				}
+			}
+
+			// remember the last visited section for the next time the page is opened without a hash
+			try { localStorage.setItem(LAST_SECTION_STORAGE_KEY, section.id); } catch { }
+		};
+
+		// switch right away on click; the hashchange that follows keeps back/forward and deep links working
+		for (const item of navItems) {
+			item.addEventListener("click", () => showSection(item.dataset.section));
+		}
+
+		window.addEventListener("hashchange", () => {
+			showSection(sectionIdFromHash());
+			window.scrollTo({ top: 0 });
+		});
+
+		let initialSectionId = sectionIdFromHash();
+		if (initialSectionId === null) {
+			try { initialSectionId = localStorage.getItem(LAST_SECTION_STORAGE_KEY); } catch { }
+		}
+		showSection(initialSectionId);
 	}
 
 	function saveElementValueToSettings(item: HTMLFormElement, didElementValueChange: boolean = false): boolean

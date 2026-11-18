@@ -36,6 +36,21 @@ async function copy(dir, relative = '') {
   }
 }
 await copy(path.join(root, 'src'));
+// Options page styles: resolve the m3e package @imports and copy the font files next to the bundle.
+await build({
+  entryPoints: [path.join(root, 'src/settings/m3e.css')], outfile: path.join(out, 'settings/m3e.css'),
+  bundle: true, minify: true, loader: { '.woff2': 'file' }, assetNames: 'fonts/[name]', logLevel: 'warning'
+});
+await fs.rm(path.join(out, 'settings/m3e-theme.css'), { force: true });
+for (const [from, to] of [
+  ['node_modules/@kyralabs/m3e-tokens/fonts/LICENSE-google-sans-flex.txt', 'settings/fonts/LICENSE-google-sans-flex.txt'],
+  ['node_modules/@kyralabs/m3e-css/LICENSE', 'settings/m3e-css.LICENSE'],
+  ['node_modules/@kyralabs/m3e-css/NOTICE', 'settings/m3e-css.NOTICE'],
+]) {
+  const destination = path.join(out, to);
+  await fs.mkdir(path.dirname(destination), { recursive: true });
+  await fs.copyFile(path.join(root, from), destination);
+}
 const manifest = JSON.parse(await fs.readFile(path.join(out, 'manifest.json'), 'utf8'));
 if (target === 'chrome') {
   manifest.manifest_version = 3;

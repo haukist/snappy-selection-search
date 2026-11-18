@@ -1,0 +1,416 @@
+/*
+ * Material 3 Expressive styles for the options page.
+ * Bundled by scripts/build.mjs (esbuild) into a single self-contained stylesheet; the raw
+ * @imports below only resolve at build time.
+ *
+ * Cascade layer order:
+ *   legacy -> the page's original styles (settings.html), kept as the lowest-priority fallback
+ *   m3e    -> @kyralabs/m3e-css components and tokens
+ *   page   -> options-page layout built on top of the m3e tokens
+ */
+@layer legacy, m3e, page;
+
+@import "@kyralabs/m3e-tokens/fonts.css";
+@import "@kyralabs/m3e-tokens/tokens.css";
+@import "@kyralabs/m3e-tokens/theme.css";
+@import "@kyralabs/m3e-css/switch.css";
+@import "@kyralabs/m3e-css/button.css";
+@import "@kyralabs/m3e-css/text-field.css";
+@import "@kyralabs/m3e-css/focus-ring.css";
+@import "@kyralabs/m3e-css/state-layer.css";
+
+/* SSS brand theme, generated with: npx m3e-theme --seed "#3399FF" --variant tonalSpot */
+@import "./m3e-theme.css";
+
+/* ------------------------------------------------------------------------------------------------
+ * Options page layout on top of the m3e tokens. Rules here win over the "legacy" layer regardless
+ * of specificity, so they only need to name what changes.
+ * ---------------------------------------------------------------------------------------------- */
+@layer page {
+	:root {
+		--sss-spring-fast: var(--m3e-sys-motion-spring-expressive-fast-spatial-duration) var(--m3e-sys-motion-spring-expressive-fast-spatial-easing);
+		--sss-spring-effects: var(--m3e-sys-motion-spring-expressive-fast-effects-duration) var(--m3e-sys-motion-spring-expressive-fast-effects-easing);
+		--sss-hover: color-mix(in srgb, var(--m3e-sys-color-on-surface) 8%, transparent);
+	}
+
+	body {
+		max-width: none;
+		padding: 0;
+		background-color: var(--m3e-sys-color-surface);
+		color: var(--m3e-sys-color-on-surface);
+		font-family: var(--m3e-sys-typescale-body-large-font);
+		font-size: var(--m3e-sys-typescale-body-large-size);
+		line-height: var(--m3e-sys-typescale-body-large-line-height);
+	}
+	a { color: var(--m3e-sys-color-primary); }
+
+	/* top app bar */
+
+	body .header {
+		position: sticky;
+		top: 0;
+		z-index: 2;
+		gap: 16px;
+		block-size: 64px;
+		padding: 0 16px 0 24px;
+		background-color: var(--m3e-sys-color-surface);
+	}
+	body .header img { width: 32px; height: 32px; }
+	body .header h1 {
+		display: flex;
+		align-items: baseline;
+		gap: 12px;
+		padding: 0;
+		font-family: var(--m3e-sys-typescale-title-large-font);
+		font-size: var(--m3e-sys-typescale-title-large-size);
+		line-height: var(--m3e-sys-typescale-title-large-line-height);
+	}
+	body .header h1 span { font-size: inherit; }
+	body .header .header-product { font-weight: 600; color: var(--m3e-sys-color-primary); }
+	body .header .header-page { color: var(--m3e-sys-color-on-surface-variant); }
+	input[name="toggleDarkMode"] {
+		inline-size: 48px;
+		block-size: 48px;
+		max-width: none;
+		border: 0;
+		border-radius: var(--m3e-sys-shape-corner-full);
+		background-color: var(--m3e-sys-color-surface-container-high);
+		font-size: 20px;
+		transition: border-radius var(--sss-spring-fast), background-color var(--sss-spring-effects);
+	}
+	input[name="toggleDarkMode"]:hover { border: 0; border-radius: var(--m3e-sys-shape-corner-medium); }
+	input[name="toggleDarkMode"]:active { border-radius: var(--m3e-sys-shape-corner-small); }
+
+	/* two-pane layout: navigation drawer on the left, the selected section on the right */
+
+	.layout {
+		display: grid;
+		grid-template-columns: 280px minmax(0, 1fr);
+		column-gap: 24px;
+		max-width: 1320px;
+		padding: 8px 24px 96px 12px;
+	}
+
+	.nav {
+		position: sticky;
+		top: 64px;
+		align-self: start;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		max-block-size: calc(100vh - 64px);
+		overflow-y: auto;
+		padding-block: 8px;
+	}
+	.nav-item {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		min-block-size: 56px;
+		padding: 0 24px 0 16px;
+		border-radius: var(--m3e-sys-shape-corner-full);
+		color: var(--m3e-sys-color-on-surface-variant);
+		font-family: var(--m3e-sys-typescale-label-large-font);
+		font-size: var(--m3e-sys-typescale-label-large-size);
+		font-weight: var(--m3e-sys-typescale-label-large-weight);
+		text-decoration: none;
+		outline: none;
+		transition: background-color var(--sss-spring-effects), border-radius var(--sss-spring-fast), color var(--sss-spring-effects);
+	}
+	.nav-item:hover { background-color: var(--sss-hover); color: var(--m3e-sys-color-on-surface); }
+	.nav-item:focus-visible { box-shadow: inset 0 0 0 3px var(--m3e-sys-color-secondary); }
+	.nav-item:active { border-radius: var(--m3e-sys-shape-corner-medium); }
+	.nav-item.active {
+		background-color: var(--m3e-sys-color-secondary-container);
+		color: var(--m3e-sys-color-on-secondary-container);
+		font-weight: 700;
+	}
+	.nav-item-icon {
+		flex: none;
+		inline-size: 24px;
+		block-size: 24px;
+		fill: currentColor;
+		transition: scale var(--sss-spring-fast);
+	}
+	.nav-item.active .nav-item-icon { scale: 1.08; }
+	.nav-item-label {
+		font: inherit;
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+
+	.content { min-width: 0; max-width: 960px; }
+
+	.section { display: none; margin: 0; }
+	.section.active {
+		display: block;
+		transition: opacity var(--sss-spring-effects), translate var(--sss-spring-fast);
+	}
+	@starting-style {
+		.section.active { opacity: 0; translate: 0 16px; }
+	}
+
+	.section-name,
+	.section:hover > .section-name {
+		padding: 20px 8px 16px;
+		border: 0;
+		color: var(--m3e-sys-color-on-surface);
+		font-family: var(--m3e-sys-typescale-headline-small-font);
+		font-size: var(--m3e-sys-typescale-headline-small-size);
+		line-height: var(--m3e-sys-typescale-headline-small-line-height);
+		cursor: default;
+	}
+	.section-name::before { content: none; }
+
+	.section-settings,
+	.section:hover > .section-settings {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		margin: 0;
+		border: 0;
+		border-radius: var(--m3e-sys-shape-corner-large);
+		overflow: clip;
+	}
+
+	/* medium widths: the drawer becomes a rail of icons with short labels below */
+
+	@media (max-width: 1023px) {
+		.layout { grid-template-columns: 96px minmax(0, 1fr); column-gap: 8px; padding-left: 0; }
+		.nav-item {
+			flex-direction: column;
+			justify-content: center;
+			gap: 4px;
+			min-block-size: 64px;
+			padding: 6px 4px;
+			border-radius: var(--m3e-sys-shape-corner-large);
+			font-size: var(--m3e-sys-typescale-label-medium-size);
+			text-align: center;
+		}
+		.nav-item-label { white-space: normal; line-height: 1.2; }
+	}
+
+	/* narrow widths: the nav becomes a horizontally scrolling row of chips under the app bar */
+
+	@media (max-width: 639px) {
+		.layout { display: block; padding: 0 12px 64px; }
+		.nav {
+			top: 64px;
+			z-index: 1;
+			flex-direction: row;
+			gap: 8px;
+			max-block-size: none;
+			margin-inline: -12px;
+			padding: 8px 12px;
+			overflow-x: auto;
+			background-color: var(--m3e-sys-color-surface);
+		}
+		.nav-item {
+			flex-direction: row;
+			flex: none;
+			gap: 8px;
+			min-block-size: 40px;
+			padding: 0 16px 0 12px;
+			border-radius: var(--m3e-sys-shape-corner-small);
+			box-shadow: inset 0 0 0 1px var(--m3e-sys-color-outline-variant);
+		}
+		.nav-item.active { box-shadow: none; }
+		.nav-item-icon { inline-size: 18px; block-size: 18px; }
+		.nav-item-label { white-space: nowrap; }
+		.nav { scrollbar-width: none; }
+		body .header { padding-inline-start: 16px; }
+		body .header h1 { min-width: 0; }
+		body .header .header-product { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+		body .header .header-page { display: none; }
+	}
+
+	/* settings rows: headline + supporting text on the left, control and reset on the right */
+
+	.setting {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(200px, 300px) 96px;
+		grid-template-areas: "name value reset" "desc value reset";
+		align-items: center;
+		column-gap: 24px;
+		row-gap: 2px;
+		padding: 14px 16px 14px 24px;
+		border: 0;
+		border-radius: var(--m3e-sys-shape-corner-extra-small);
+		background-color: var(--m3e-sys-color-surface-container-low);
+		transition: background-color var(--sss-spring-effects);
+	}
+	.setting:hover { background-color: var(--m3e-sys-color-surface-container); }
+	.setting:not(:has(> .setting-value)) { grid-template-areas: "name name name" "desc desc desc"; }
+	.setting:has(> #engines-table) { display: block; padding: 12px; }
+
+	.setting-name {
+		grid-area: name;
+		align-self: end;
+		width: auto;
+		max-width: none;
+		margin: 0;
+		font-size: var(--m3e-sys-typescale-body-large-size);
+		font-weight: 500;
+	}
+	.setting-description {
+		grid-area: desc;
+		align-self: start;
+		width: auto;
+		padding: 0;
+	}
+	.setting-description,
+	.setting-description *,
+	.setting-description a,
+	.setting-description details,
+	.setting-description summary {
+		font-size: var(--m3e-sys-typescale-body-medium-size);
+		line-height: var(--m3e-sys-typescale-body-medium-line-height);
+		color: var(--m3e-sys-color-on-surface-variant);
+	}
+	.setting-description a,
+	.setting-description summary:hover { color: var(--m3e-sys-color-primary); }
+	.setting-value {
+		grid-area: value;
+		width: auto;
+		max-width: none;
+		margin: 0;
+		display: flex;
+		justify-content: flex-end;
+	}
+	.setting-reset {
+		grid-area: reset;
+		min-width: 0;
+		display: flex;
+		justify-content: flex-end;
+	}
+	.setting.indent { padding-inline-start: 48px; }
+	.setting.indent .setting-name::before {
+		content: "↳\00a0";
+		color: var(--m3e-sys-color-on-surface-variant);
+	}
+	.setting.disabled,
+	.setting.disabled:hover { background-color: var(--m3e-sys-color-surface-container-low); color: var(--m3e-sys-color-on-surface-variant); }
+
+	/* m3e components inside rows */
+
+	.setting-value .m3e-text-field { inline-size: 100%; min-inline-size: 0; }
+	.setting-value .m3e-switch { margin-inline-end: 4px; }
+
+	/* native controls not (yet) converted to m3e markup: outlined fields, tonal buttons */
+
+	select,
+	textarea,
+	input:is([type=text], [type=number]):not([class*="m3e-"]) {
+		box-sizing: border-box;
+		min-block-size: 40px;
+		padding: 8px 12px;
+		border: 1px solid var(--m3e-sys-color-outline);
+		border-radius: var(--m3e-sys-shape-corner-extra-small);
+		background-color: transparent;
+		color: var(--m3e-sys-color-on-surface);
+		font-family: inherit;
+		font-size: inherit;
+		outline: none;
+	}
+	.setting-value :is(select, textarea, input:is([type=text], [type=number]):not([class*="m3e-"])) {
+		inline-size: 100%;
+		min-block-size: 56px;
+		padding-inline: 16px;
+		font-size: var(--m3e-sys-typescale-body-large-size);
+	}
+	select:hover,
+	textarea:hover,
+	input:is([type=text], [type=number]):not([class*="m3e-"]):hover { border-color: var(--m3e-sys-color-on-surface); }
+	select:focus-visible,
+	textarea:focus,
+	input:is([type=text], [type=number]):not([class*="m3e-"]):focus {
+		border-color: var(--m3e-sys-color-primary);
+		box-shadow: inset 0 0 0 1px var(--m3e-sys-color-primary);
+	}
+	select {
+		appearance: none;
+		padding-inline-end: 40px !important;
+		background-image:
+			linear-gradient(45deg, transparent 50%, var(--m3e-sys-color-on-surface-variant) 50%),
+			linear-gradient(135deg, var(--m3e-sys-color-on-surface-variant) 50%, transparent 50%);
+		background-position: calc(100% - 22px) 50%, calc(100% - 17px) 50%;
+		background-size: 5px 5px;
+		background-repeat: no-repeat;
+		text-overflow: ellipsis;
+	}
+	option, optgroup { background-color: var(--m3e-sys-color-surface-container); color: var(--m3e-sys-color-on-surface); }
+
+	input[type=button]:not([name="toggleDarkMode"]) {
+		inline-size: auto;
+		min-block-size: 40px;
+		padding: 0 16px;
+		border: 0;
+		border-radius: var(--m3e-sys-shape-corner-full);
+		background-color: var(--m3e-sys-color-secondary-container);
+		color: var(--m3e-sys-color-on-secondary-container);
+		font-family: var(--m3e-sys-typescale-label-large-font);
+		font-size: var(--m3e-sys-typescale-label-large-size);
+		font-weight: var(--m3e-sys-typescale-label-large-weight);
+		transition: border-radius var(--sss-spring-fast);
+	}
+	input[type=button]:not([name="toggleDarkMode"]):hover { border: 0; border-radius: var(--m3e-sys-shape-corner-medium); }
+	input[type=button]:disabled { opacity: 0.38; }
+	.setting-reset input[type=button] { background-color: transparent; color: var(--m3e-sys-color-primary); }
+	input[type=checkbox]:not([class*="m3e-"]) { accent-color: var(--m3e-sys-color-primary); inline-size: 18px; block-size: 18px; }
+	input[type=color] {
+		inline-size: 56px;
+		block-size: 40px;
+		padding: 4px;
+		border: 1px solid var(--m3e-sys-color-outline);
+		border-radius: var(--m3e-sys-shape-corner-small);
+		background: transparent;
+	}
+
+	pop, popm {
+		padding: 0 4px;
+		border-radius: var(--m3e-sys-shape-corner-extra-small);
+		background-color: var(--m3e-sys-color-surface-container-highest);
+	}
+
+	/* search engines table */
+
+	#engines-table * { color: inherit; }
+	#engines-table input:is([type=text], [type=number]):not([class*="m3e-"]) { min-block-size: 32px; padding: 4px 8px; }
+	.engine-table-row:not(.static-row):hover { background-color: var(--sss-hover); border-radius: var(--m3e-sys-shape-corner-small); }
+	.engine-uneditable {
+		border: 0;
+		border-radius: var(--m3e-sys-shape-corner-extra-small);
+		background-color: var(--m3e-sys-color-surface-container-highest);
+		color: var(--m3e-sys-color-on-surface-variant);
+	}
+
+	/* group editor dialog */
+
+	#group-background-div { background-color: var(--m3e-sys-color-scrim, #000); opacity: 0.32; }
+	#group-popup-container {
+		border: 0;
+		border-radius: var(--m3e-sys-shape-corner-extra-large);
+		background-color: var(--m3e-sys-color-surface-container-high);
+		box-shadow: 0 8px 24px rgb(0 0 0 / 0.2);
+		overflow: clip;
+	}
+	#group-popup-header, #group-popup-footer { padding: 16px 20px; gap: 8px; }
+	#group-selected-engines-container { border-bottom-color: var(--m3e-sys-color-outline-variant); }
+	.group-engines-list-row:hover { background-color: var(--sss-hover); }
+
+	/* narrow widths: stack each row's control under its description (after the base .setting rules) */
+
+	@media (max-width: 639px) {
+		.setting {
+			grid-template-columns: minmax(0, 1fr) auto;
+			grid-template-areas: "name reset" "desc desc" "value value";
+			row-gap: 8px;
+			padding-inline-start: 16px;
+		}
+		.setting:not(:has(> .setting-value)) { grid-template-areas: "name name" "desc desc"; }
+		.setting.indent { padding-inline-start: 32px; }
+		.setting-value { justify-content: flex-start; }
+		.setting-reset { visibility: visible; }
+	}
+}
