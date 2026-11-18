@@ -18,7 +18,7 @@
 	"applications": {
 		"gecko": {
 			"id": "jid1-KdTtiCj6wxVAFA@jetpack",
-			"strict_min_version": "66.0"
+			"strict_min_version": "128.0"
 		}
 	},
 

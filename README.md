@@ -137,7 +137,7 @@ Now you have .js files, so you can use SSS as a WebExtension. Yay!
 - Tabs for indentation, please! ;) (Spaces can be used to align things.)
 - No whitespace at the end of lines. Settings like VSCode's "files.trimTrailingWhitespace" help with this.
 - Try to follow the style you see in the existing code. If you think it's inconsistent in some places, feel free to do your own thing. It will be reviewed anyway. ;)
-- SSS currently supports Firefox 63 onward, which means that you must take extra care when using an WebExtensions API. Make sure it exists in Firefox 63, or at least that the code doesn't run and crash on older versions. Ideally, install Firefox 63 separately on your computer (having a different Firefox profile for that helps greatly) and disable its auto updates.
+- SSS currently supports Firefox 128 onward (the options page relies on CSS cascade layers, `:has()` and `@property`), which means that you must take extra care when using an WebExtensions API. Make sure it exists in Firefox 128, or at least that the code doesn't run and crash on older versions. Ideally, install Firefox 128 ESR separately on your computer (having a different Firefox profile for that helps greatly) and disable its auto updates.
 
 ### Collaboration
 

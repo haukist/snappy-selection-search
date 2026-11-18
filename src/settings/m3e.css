@@ -375,14 +375,145 @@
 
 	/* search engines table */
 
-	#engines-table * { color: inherit; }
-	#engines-table input:is([type=text], [type=number]):not([class*="m3e-"]) { min-block-size: 32px; padding: 4px 8px; }
-	.engine-table-row:not(.static-row):hover { background-color: var(--sss-hover); border-radius: var(--m3e-sys-shape-corner-small); }
-	.engine-uneditable {
-		border: 0;
-		border-radius: var(--m3e-sys-shape-corner-extra-small);
-		background-color: var(--m3e-sys-color-surface-container-highest);
+	#engines-table {
+		--sss-engine-cell: 32px;	/* dragger, checkboxes and icon columns */
+		--sss-engine-gap: 6px;
+		padding: 0;
+	}
+	/* :where() keeps this at zero specificity so the per-part rules below can set their own color/size */
+	:where(#engines-table *) {
+		color: inherit;
+		font-size: var(--m3e-sys-typescale-body-medium-size);
+	}
+	.engine-table-row { border-radius: var(--m3e-sys-shape-corner-medium); }
+	.engine-table-row:not(.static-row):hover { background-color: var(--sss-hover); }
+	.engine-table-row.expanded { background-color: var(--m3e-sys-color-surface-container-high); }
+	.engine-itself {
+		align-items: center;
+		gap: var(--sss-engine-gap);
+		min-block-size: 44px;
+		padding: 4px 4px 4px 0;
+	}
+	.engine-itself > div,
+	.engine-options > div { margin: 0; }
+
+	/* header row */
+	.static-row:first-child .engine-itself { min-block-size: 32px; }
+	.static-row:first-child .engine-itself > div {
 		color: var(--m3e-sys-color-on-surface-variant);
+		font-size: var(--m3e-sys-typescale-label-medium-size);
+		font-weight: var(--m3e-sys-typescale-label-medium-weight);
+	}
+	.static-row:first-child :is(.engine-name, .engine-search-link, .engine-icon-link) { padding-inline-start: 12px; }
+	.static-row:first-child :is(.engine-is-enabled, .engine-is-enabled-in-context-menu, .engine-shortcut) { text-align: center; }
+
+	.engine-dragger,
+	.engine-is-enabled,
+	.engine-is-enabled-in-context-menu,
+	.engine-icon-img {
+		flex: none;
+		inline-size: var(--sss-engine-cell);
+		min-width: 0;
+		margin: 0;
+	}
+	.engine-dragger {
+		color: var(--m3e-sys-color-on-surface-variant);
+		font-size: 18px;
+		user-select: none;
+	}
+	.engine-dragger:hover { color: var(--m3e-sys-color-on-surface); }
+	.engine-icon-img img { inline-size: 24px; block-size: 24px; object-fit: contain; }
+	/* the built-in SSS icons (copy, open link, separator) are black glyphs */
+	:root[data-theme="dark"] .engine-itself:has(.engine-uneditable-description) .engine-icon-img img { filter: invert(1); }
+
+	/* compact outlined fields */
+	#engines-table input:is([type=text], [type=number]):not([class*="m3e-"]) {
+		inline-size: 100%;
+		min-block-size: 36px;
+		padding: 4px 12px;
+		border-color: var(--m3e-sys-color-outline-variant);
+		border-radius: var(--m3e-sys-shape-corner-small);
+		background-color: transparent;
+		text-overflow: ellipsis;
+	}
+	#engines-table input:is([type=text], [type=number]):not([class*="m3e-"]):hover { border-color: var(--m3e-sys-color-outline); }
+	#engines-table input:is([type=text], [type=number]):not([class*="m3e-"]):focus { border-color: var(--m3e-sys-color-primary); }
+
+	.engine-uneditable {
+		display: block;	/* text-overflow only applies to block containers, not to flex ones */
+		min-block-size: 36px;
+		padding: 4px 12px;
+		line-height: 28px;
+		border: 0;
+		border-radius: var(--m3e-sys-shape-corner-small);
+		background-color: var(--m3e-sys-color-surface-container-high);
+		color: var(--m3e-sys-color-on-surface-variant);
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+	.engine-uneditable-name { inline-size: 15%; flex: none; }
+	.engine-uneditable-description { flex: 1; inline-size: auto; }
+	.group-engine-description:hover { color: var(--m3e-sys-color-primary); }
+
+	.engine-name { inline-size: 15%; flex: none; }
+	.engine-search-link,
+	.engine-description-small { flex: 1 1 50%; inline-size: auto; min-width: 0; }
+	.engine-icon-link { flex: 1 1 35%; inline-size: auto; min-width: 0; }
+	.engine-shortcut { flex: none; inline-size: 44px; }
+	#engines-table .engine-shortcut input { padding-inline: 0; text-align: center; }
+	.engine-delete { flex: none; inline-size: 40px; min-width: 0; }
+
+	/* delete: a standard icon button */
+	.engine-delete-button,
+	.group-remove-engine-button input[type=button] {
+		display: inline-grid;
+		place-items: center;
+		inline-size: 36px;
+		min-block-size: 36px;
+		block-size: 36px;
+		padding: 0;
+		border: 0;
+		border-radius: var(--m3e-sys-shape-corner-full);
+		background: transparent;
+		color: var(--m3e-sys-color-on-surface-variant);
+		cursor: pointer;
+		transition: background-color var(--sss-spring-effects), border-radius var(--sss-spring-fast);
+	}
+	.engine-delete-button svg { inline-size: 20px; block-size: 20px; fill: currentColor; }
+	.engine-delete-button:hover,
+	.group-remove-engine-button input[type=button]:hover {
+		border: 0;
+		border-radius: var(--m3e-sys-shape-corner-medium);
+		background-color: color-mix(in srgb, var(--m3e-sys-color-error) 12%, transparent);
+		color: var(--m3e-sys-color-error);
+	}
+	.engine-delete-button:focus-visible { outline: 3px solid var(--m3e-sys-color-secondary); outline-offset: 0; }
+
+	/* per-engine options, shown under the row that was clicked */
+	.engine-options {
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 8px 24px;
+		margin: 0 0 0 calc(4 * (var(--sss-engine-cell) + var(--sss-engine-gap)));
+		padding: 0 12px 10px;
+		color: var(--m3e-sys-color-on-surface-variant);
+	}
+	.engine-options > div { display: flex; align-items: center; gap: 8px; }
+	.engine-options label { white-space: nowrap; }
+	#engines-table .engine-options select { min-block-size: 36px; margin-left: 0 !important; border-radius: var(--m3e-sys-shape-corner-small); }
+	.engine-options-empty { color: var(--m3e-sys-color-on-surface-variant); font-style: italic; }
+
+	/* add buttons row */
+	.static-row:last-child .engine-itself { padding-block: 12px 4px; }
+	.static-row:last-child .engine-dragger,
+	.static-row:last-child .engine-is-enabled,
+	.static-row:last-child .engine-is-enabled-in-context-menu,
+	.static-row:last-child .engine-icon-img { display: none; }
+	.engine-add-button { inline-size: auto; max-width: none; flex: none; }
+	.engine-add-button input[name="addEngineButton"] {
+		background-color: var(--m3e-sys-color-primary);
+		color: var(--m3e-sys-color-on-primary);
 	}
 
 	/* group editor dialog */
@@ -412,5 +543,8 @@
 		.setting.indent { padding-inline-start: 32px; }
 		.setting-value { justify-content: flex-start; }
 		.setting-reset { visibility: visible; }
+		/* the engines table keeps its columns and scrolls sideways instead of squashing them */
+		#engines-table { overflow-x: auto; }
+		.engine-table-row { min-width: 720px; }
 	}
 }

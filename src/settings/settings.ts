@@ -951,8 +951,10 @@ namespace SSS_Settings
 				tableRow.onclick = ev => {
 					if (currentlyExpandedEngineOptions !== null && currentlyExpandedEngineOptions !== optionsRow) {
 						currentlyExpandedEngineOptions.style.display = "none";
+						currentlyExpandedEngineOptions.parentElement.classList.remove("expanded");
 					}
-					optionsRow.style.display = "initial";
+					optionsRow.style.display = "flex";
+					tableRow.classList.add("expanded");
 					currentlyExpandedEngineOptions = optionsRow;
 					ev.stopPropagation();
 				};
@@ -966,6 +968,7 @@ namespace SSS_Settings
 					// hide if neither itself or any parent is a table row
 					if ((ev.target as Element).closest(".engine-table-row") === null) {
 						currentlyExpandedEngineOptions.style.display = "none";
+						currentlyExpandedEngineOptions.parentElement.classList.remove("expanded");
 					}
 				}
 			};
@@ -1395,7 +1398,7 @@ namespace SSS_Settings
 		{
 			const noExtraOptionsLabel = document.createElement("label");
 			noExtraOptionsLabel.textContent = "No extra options.";
-			noExtraOptionsLabel.style.color = "#999";
+			noExtraOptionsLabel.className = "engine-options-empty";
 			engineOptions.appendChild(noExtraOptionsLabel);
 		}
 
@@ -1687,15 +1690,32 @@ namespace SSS_Settings
 		return parent;
 	}
 
+	// Material Icons "close" (Apache 2.0)
+	const DELETE_ICON_PATH = "M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z";
+
+	function createIconSvg(pathData: string): SVGSVGElement
+	{
+		const svgNamespace = "http://www.w3.org/2000/svg";
+		const svg = document.createElementNS(svgNamespace, "svg");
+		svg.setAttribute("viewBox", "0 0 24 24");
+		svg.setAttribute("aria-hidden", "true");
+		const path = document.createElementNS(svgNamespace, "path");
+		path.setAttribute("d", pathData);
+		svg.appendChild(path);
+		return svg;
+	}
+
 	// sets the delete button for a search engine in the engines table
 	function createElement_DeleteButton(i: number): HTMLDivElement
 	{
 		const parent = createElement_DeleteButtonDiv();
 
-		const deleteButton = document.createElement("input");
+		const deleteButton = document.createElement("button");
 		deleteButton.type = "button";
-		deleteButton.value = "✖";
+		deleteButton.className = "engine-delete-button";
 		deleteButton.title = "Delete";
+		deleteButton.setAttribute("aria-label", "Delete");
+		deleteButton.appendChild(createIconSvg(DELETE_ICON_PATH));
 		deleteButton.onclick = _ => {
 			// Deleting an engine that belongs to one or more groups must also remove it from the groups, so we ask the user for confirmation.
 			const engineToDelete = settings.searchEngines[i];
