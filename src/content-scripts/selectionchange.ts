@@ -9,6 +9,12 @@ namespace selectionchange
 	export const modifierKey = MAC ? "metaKey" : "ctrlKey";
 
 	let ranges = null;
+	const userSelectionEvents = new WeakSet<Event>();
+
+	export function consumeUserSelectionChange(ev: Event): boolean {
+		// Only notifications created here from trusted input may trigger actions.
+		return userSelectionEvents.delete(ev);
+	}
 
 	export function start() {
 		ranges = getSelectedRanges();
@@ -45,15 +51,19 @@ namespace selectionchange
 		return newRanges;
 	}
 
-	function onInput(ev)
+	function onInput(ev: Event)
 	{
+		if (!ev.isTrusted) return;
+
 		if (!isInputField(ev.target)) {
 			dispatchEventIfSelectionChanged(true, ev, false);
 		}
 	}
 
-	function onKeyDown(ev)
+	function onKeyDown(ev: KeyboardEvent)
 	{
+		if (!ev.isTrusted) return;
+
 		const code = ev.keyCode;
 
 		if ((code === 65 && ev[modifierKey] && !ev.shiftKey && !ev.altKey) // Ctrl-A or Cmd-A
@@ -66,14 +76,16 @@ namespace selectionchange
 		}
 	}
 
-	function onMouseUp(ev)
+	function onMouseUp(ev: MouseEvent)
 	{
+		if (!ev.isTrusted) return;
+
 		if (ev.button === 0) {
 			setTimeout(() => dispatchEventIfSelectionChanged(isInputField(ev.target), ev, true), 0);
 		}
 	}
 
-	function dispatchEventIfSelectionChanged(force, ev, isMouse)
+	function dispatchEventIfSelectionChanged(force: boolean, ev: Event & { altKey?: boolean }, isMouse: boolean)
 	{
 		const newRanges = getSelectedRanges();
 
@@ -83,7 +95,10 @@ namespace selectionchange
 			event.altKey = ev.altKey;
 			event.isMouse = isMouse;
 			event.event = ev;
-			setTimeout(() => document.dispatchEvent(event), 0);
+			setTimeout(() => {
+				userSelectionEvents.add(event);
+				document.dispatchEvent(event);
+			}, 0);
 		}
 	}
 

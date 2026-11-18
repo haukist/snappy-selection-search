@@ -1,16 +1,30 @@
 {
-  "name": "swift-selection-search",
+  "name": "snappy-selection-search",
   "version": "1.0.0",
-  "description": "Swift Selection Search (SSS) is a simple Firefox add-on that lets you quickly search for some text in a page using your favorite search engines.",
+  "private": true,
+  "description": "Snappy Selection Search (SSS) is a simple Firefox and Chrome extension that lets you quickly search for some text in a page using your favorite search engines.",
   "main": "swift-selection-search.js",
-  "homepage": "https://github.com/CanisLupus/swift-selection-search",
+  "homepage": "https://github.com/haukist/snappy-selection-search",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build:firefox": "node scripts/build.mjs firefox",
+    "build:chrome": "node scripts/build.mjs chrome",
+    "package:chrome": "node scripts/build.mjs chrome --zip",
+    "test": "node --test tests/*.test.mjs",
+    "test:chrome": "node tests/chrome-integration.mjs"
   },
-  "author": "Daniel Lobo",
+  "author": "haukist",
+  "contributors": ["Daniel Lobo (original Swift Selection Search)"],
   "license": "MIT",
   "dependencies": {
     "@types/firefox-webext-browser": "^82.0.0",
-    "typescript": "^4.1.2"
+    "typescript": "^4.1.2",
+    "webextension-polyfill": "^0.12.0"
+  },
+  "devDependencies": {
+    "@kyralabs/m3e-css": "^1.8.0",
+    "@kyralabs/m3e-tokens": "^1.8.0",
+    "esbuild": "^0.28.2",
+    "fflate": "^0.8.3",
+    "playwright": "^1.65.0"
   }
 }

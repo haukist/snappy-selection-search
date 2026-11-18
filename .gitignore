@@ -6,3 +6,6 @@ Thumbs.db
 
 # but not these files
 !/src/libs/*
+
+/dist/
+/test-results/

@@ -71,6 +71,7 @@ namespace ContentScript
 	let settings: SSS.Settings = null;
 	let sssIcons: { [id: string] : SSS.SSSIconDefinition; } = null;
 	let popupShowTimeout: number = null;
+	let activationGeneration = 0;
 
 	setTimeout(() => PopupCreator.onSearchEngineClick = onSearchEngineClick, 0);
 
@@ -182,6 +183,7 @@ namespace ContentScript
 
 	function deactivate()
 	{
+		activationGeneration++;
 		// unregister with all events
 
 		document.removeEventListener("mousemove", onMouseUpdate);
@@ -212,6 +214,9 @@ namespace ContentScript
 
 	function onSelectionChange(ev: selectionchange.CustomSelectionChangeEvent)
 	{
+		// The notification is synthetic; only consume ones created from trusted input.
+		if (!selectionchange.consumeUserSelectionChange(ev)) return;
+
 		if (popup && popup.isReceiverOfEvent(ev.event)) return;
 
 		if (activationSettings.popupOpenBehaviour === SSS.PopupOpenBehaviour.Auto && activationSettings.popupDelay > 0)
@@ -246,8 +251,10 @@ namespace ContentScript
 
 	function acquireSettings(onSettingsAcquired: () => void)
 	{
+		const generation = activationGeneration;
 		browser.runtime.sendMessage(new GetPopupSettingsMessage()).then(
 			popupSettings => {
+				if (generation !== activationGeneration || !document.defaultView || !popupSettings || !popupSettings.settings) return;
 				settings = popupSettings.settings;
 				sssIcons = popupSettings.sssIcons;
 				onSettingsAcquired();
@@ -375,19 +382,16 @@ namespace ContentScript
 
 	function createPopup(settings: SSS.Settings): PopupCreator.SSSPopup
 	{
-		// only define new element if not already defined (can get here multiple times if settings are reloaded)
-		if (!customElements.get("sss-popup"))
-		{
-			// temp class that locks in settings as arguments to SSSPopup
-			class SSSPopupWithSettings extends PopupCreator.SSSPopup {
-				constructor() { super(getSettings(), getIcons()); }
+		const popup = new PopupCreator.SSSPopup(settings, sssIcons);
+
+		popup.onStylesLoaded = () => {
+			if (!popup.isShown()) return;
+			if (!selection.isInInputField && selection.selection.rangeCount === 0) {
+				popup.hide();
+				return;
 			}
-
-			customElements.define("sss-popup", SSSPopupWithSettings);
-		}
-
-		const popup = document.createElement("sss-popup") as PopupCreator.SSSPopup;
-
+			popup.setPopupPosition(settings, selection, mousePositionX, mousePositionY);
+		};
 		document.documentElement.appendChild(popup);
 
 		// register popup events
@@ -442,8 +446,13 @@ namespace ContentScript
 		return settings.searchEngines.find(e => e.shortcut === key);
 	}
 
-	function onKeyDown(ev)
+	function onKeyDown(ev: KeyboardEvent & { originalTarget: Element })
 	{
+		if (!ev.isTrusted) return;
+		const rawTarget = ev.originalTarget || (popup && popup.isReceiverOfEvent(ev) && popup.getFocusedElement()) || ev.composedPath()[0];
+		const eventTarget = rawTarget instanceof Element ? rawTarget : rawTarget instanceof Node ? rawTarget.parentElement : null;
+		if (!eventTarget) return;
+
 		// Check if the user pressed a shortcut.
 		// The popup must be visible, unless 'Always enable shortcuts' is checked.
 
@@ -452,7 +461,7 @@ namespace ContentScript
 		if (!ev.altKey && !ev.ctrlKey && !ev.metaKey && !ev.shiftKey	// modifiers are not supported right now
 			&& !isAnyEditableFieldFocused())							// shortcuts are disabled in editable fields
 		{
-			if ((isPopupVisible && ev.originalTarget.className !== "sss-input-field")				// if using popup, make sure we're not inside the popup's text field
+			if ((isPopupVisible && !eventTarget.classList.contains("sss-input-field"))
 				|| (activationSettings.useEngineShortcutWithoutPopup && saveCurrentSelection()))	// if outside popup, ensure a selection exists, otherwise we crash later
 			{
 				if (settings !== null) {
@@ -473,7 +482,7 @@ namespace ContentScript
 			const lastIcon = popup.enginesContainer.lastChild as HTMLImageElement;
 
 			// Focus the first icon for the first time, as well as after the last one so as to keep looping them.
-			if (document.activeElement.nodeName !== "SSS-POPUP" || ev.originalTarget === lastIcon) {
+			if (document.activeElement.nodeName !== "SSS-POPUP" || eventTarget === lastIcon) {
 				firstIcon.focus();
 				ev.preventDefault();
 				return;
@@ -487,12 +496,12 @@ namespace ContentScript
 			let openingBehaviour;
 
 			// if we're inside the popup's text field, grab the first user-defined engine and search using that
-			if (ev.originalTarget.nodeName === "INPUT") {
+			if (eventTarget.nodeName === "INPUT") {
 				engine = settings.searchEngines.find(e => e.type !== SSS.SearchEngineType.SSS);
 				openingBehaviour = SSS.OpenResultBehaviour.NewBgTab;	// for now, using enter is the same as ctrl-clicking
 			} else {
 				// if cycling the icons using "tab", grab the focused icon
-				const engineIndex = [...popup.enginesContainer.children].indexOf(ev.originalTarget);
+				const engineIndex = [...popup.enginesContainer.children].indexOf(eventTarget);
 				engine = settings.searchEngines[engineIndex];
 				openingBehaviour = settings.shortcutBehaviour;
 			}
@@ -517,13 +526,15 @@ namespace ContentScript
 		}
 	}
 
-	function maybeHidePopup(ev?)
+	function maybeHidePopup(ev?: Event)
 	{
+		if (ev && !ev.isTrusted) return;
+
 		if (popup === null) return;
 
 		if (ev)
 		{
-			if (ev.type === "keydown")
+			if (ev instanceof KeyboardEvent)
 			{
 				// these keys shouldn't hide the popup
 				if (ev.keyCode == 16) return;	// shift
@@ -546,7 +557,7 @@ namespace ContentScript
 			}
 
 			// if we pressed with right mouse button and that isn't supposed to hide the popup, don't hide
-			if (ev.button === 2 && settings && settings.hidePopupOnRightClick === false) return;
+			if (ev instanceof MouseEvent && ev.button === 2 && settings && settings.hidePopupOnRightClick === false) return;
 		}
 
 		popup.hide();
@@ -560,6 +571,8 @@ namespace ContentScript
 
 	function onSearchEngineClick(ev: MouseEvent, engine: SSS.SearchEngine, settings: SSS.Settings)
 	{
+		if (!ev.isTrusted) return;
+
 		// if using middle mouse and can't, early out so we don't hide popup
 		if (ev.button === 1 && !canMiddleClickEngine) return;
 
@@ -604,6 +617,8 @@ namespace ContentScript
 
 	function onMouseDown(ev: MouseEvent)
 	{
+		if (!ev.isTrusted) return;
+
 		if (ev.button !== 1) return;
 
 		const selection: Selection = window.getSelection();
@@ -630,6 +645,8 @@ namespace ContentScript
 
 	function onMouseUp(ev: MouseEvent)
 	{
+		if (!ev.isTrusted) return;
+
 		if (ev.button === 1) {
 			// return value to normal to allow clicking engines again with middle mouse
 			canMiddleClickEngine = true;
@@ -664,12 +681,26 @@ namespace ContentScript
 namespace PopupCreator
 {
 	export let onSearchEngineClick = null;
+	const VIEWPORT_MARGIN = 5;
 
-	export class SSSPopup extends HTMLElement
+	// Chrome does not expose a custom-element registry in its isolated content world.
+	// Return a real DOM host from super(), then add our methods to that element.
+	const PopupElement = function () { return document.createElement("sss-popup"); } as unknown as typeof HTMLElement;
+	PopupElement.prototype = HTMLElement.prototype;
+
+	export class SSSPopup extends PopupElement
 	{
 		content: HTMLDivElement;
 		inputField: HTMLInputElement;
 		enginesContainer: HTMLDivElement;
+		private popupStyle: HTMLLinkElement;
+		private popupShadowRoot: ShadowRoot;
+		onStylesLoaded: () => void = () => {};
+		private popupCSS: string;
+		private customPopupCSS: string;
+		private stylesFailed = false;
+		private appliedSheet: CSSStyleSheet | null = null;
+		private focusInputAfterStyles = false;
 
 		constructor(settings: SSS.Settings, sssIcons: { [id: string] : SSS.SSSIconDefinition; })
 		{
@@ -677,15 +708,16 @@ namespace PopupCreator
 
 			Object.setPrototypeOf(this, SSSPopup.prototype);	// needed so that instanceof and casts work
 
-			const shadowRoot = this.attachShadow({mode: "closed"});
+			const shadowRoot = this.popupShadowRoot = this.attachShadow({mode: "closed"});
 
-			const css = this.generateStylesheet(settings);
-			var style = document.createElement("style");
-			style.appendChild(document.createTextNode(css));
-			shadowRoot.appendChild(style);
+			this.popupCSS = this.generateStylesheet(settings);
+			this.customPopupCSS = settings.useCustomPopupCSS ? settings.customPopupCSS : "";
+			this.popupStyle = this.createStylesheetLink();
+			shadowRoot.appendChild(this.popupStyle);
 
 			// create popup parent (will contain all icons)
 			this.content = document.createElement("div");
+			this.content.style.setProperty("visibility", "hidden");
 			this.content.classList.add("sss-content");
 			shadowRoot.appendChild(this.content);
 
@@ -712,27 +744,89 @@ namespace PopupCreator
 			this.createPopupContent(settings, sssIcons);
 		}
 
+		private createStylesheetLink(): HTMLLinkElement
+		{
+			const style = document.createElement("link");
+			style.rel = "stylesheet";
+			style.href = browser.runtime.getURL("/content-scripts/popup.css");
+			style.addEventListener("load", () => {
+				try {
+					this.applyStylesheet();
+					this.onStylesLoaded();
+				} catch (error) {
+					this.stylesFailed = true;
+					this.hide();
+					console.error("SSS: Could not apply popup styles", error);
+				} finally {
+					this.content.style.removeProperty("visibility");
+					if (this.focusInputAfterStyles) {
+						this.focusInputAfterStyles = false;
+						this.setFocusOnInputFieldText();
+					}
+				}
+			});
+			style.addEventListener("error", () => {
+				this.stylesFailed = true;
+				this.hide();
+				console.error("SSS: Could not load popup stylesheet");
+			});
+			return style;
+		}
+
+		private applyStylesheet()
+		{
+			// An extension resource loads without relaxing the page's CSP. Populate
+			// its sheet through CSSOM; each grouping rule can contain multiple rules.
+			const sheet = this.popupStyle.sheet as CSSStyleSheet;
+			if (!sheet) throw new Error("Popup stylesheet is unavailable");
+			if (sheet === this.appliedSheet) return;
+
+			sheet.insertRule(`@media all { ${this.popupCSS} }`, sheet.cssRules.length);
+			this.appliedSheet = sheet;
+			if (this.customPopupCSS) {
+				try {
+					sheet.insertRule(`@media all { ${this.customPopupCSS} }`, sheet.cssRules.length);
+				} catch (error) {
+					// Invalid custom CSS must not prevent the default popup styles.
+					console.error("SSS: Could not apply custom popup CSS", error);
+				}
+			}
+		}
+
 		generateStylesheet(settings: SSS.Settings)
 		{
 			// Due to "all: initial !important", all inherited properties that are
 			// defined afterwards will also need to use !important.
 			// Inherited properties: https://stackoverflow.com/a/5612360/2162837
 
+			const background = settings.popupBackgroundColor?.trim() || "#FFFFFF";
+			const color = document.createElement("span").style;
+			color.backgroundColor = background;
+			const useDefaultBackground = color.backgroundColor === "white" || color.backgroundColor === "rgb(255, 255, 255)";
 			return `
 				:host {
 					all: initial !important;
 				}
 
 				.sss-content {
+					color-scheme: light;
+					--sss-background: ${background};
+					--sss-text: #202124;
+					--sss-input-background: color-mix(in srgb, var(--sss-background), #000 7%);
+					--sss-input-hover-background: color-mix(in srgb, var(--sss-background), #000 11%);
+					--sss-action-filter: none;
+					--sss-shadow: 0 1px 2px rgba(0, 0, 0, 0.30), 0 2px 6px 2px rgba(0, 0, 0, 0.15), 0 4px 12px rgba(0, 0, 0, 0.10);
+					--sss-focus-ring: ${settings.popupHighlightColor};
 					font-size: 0px !important;
 					direction: ltr !important;
 					position: absolute;
 					z-index: 2147483647;
 					user-select: none;
 					-moz-user-select: none;
-					box-shadow: rgba(0, 0, 0, 0.5) 0px 0px 3px;
-					background-color: ${settings.popupBackgroundColor};
-					border-radius: ${settings.popupBorderRadius}px;
+					box-shadow: var(--sss-shadow);
+					background-color: var(--sss-background);
+					color: var(--sss-text);
+					border-radius: ${Math.max(settings.popupBorderRadius, 12)}px;
 					padding: ${settings.popupPaddingY}px ${settings.popupPaddingX}px;
 					text-align: center;
 					${this.generateStylesheet_Width(settings)}
@@ -742,12 +836,27 @@ namespace PopupCreator
 					width: ${settings.popupItemSize}px;
 					height: ${settings.popupItemSize}px;
 					padding: ${3 + settings.popupItemVerticalPadding}px ${settings.popupItemPadding}px;
-					border-radius: ${settings.popupItemBorderRadius}px;
+					box-sizing: content-box;
+					border-radius: ${Math.max(settings.popupItemBorderRadius, 8)}px;
 					cursor: pointer;
+					transition: background-color 150ms cubic-bezier(0.2, 0, 0, 1), transform 150ms cubic-bezier(0.2, 0, 0, 1);
+				}
+
+				.sss-content img:focus-visible {
+					outline: 2px solid var(--sss-focus-ring);
+					outline-offset: -2px;
+				}
+
+				.sss-content img:active {
+					background-color: color-mix(in srgb, ${settings.popupHighlightColor} 28%, transparent);
 				}
 
 				.sss-content img:hover {
 					${this.generateStylesheet_IconHover(settings)}
+				}
+
+				.sss-action-icon {
+					filter: var(--sss-action-filter);
 				}
 
 				.separator {
@@ -761,17 +870,33 @@ namespace PopupCreator
 				.sss-input-field {
 					box-sizing: border-box;
 					width: calc(100% - 8px);
-					border: 1px solid #ccc;
-					border-radius: ${settings.popupBorderRadius}px;
-					padding: 4px 7px;
-					margin: 4px 0px 2px 0px;
+					border: none;
+					background-color: var(--sss-input-background);
+					color: var(--sss-text);
+					caret-color: var(--sss-focus-ring);
+					font: 14px/20px Roboto, "Segoe UI", system-ui, sans-serif !important;
+					border-radius: 999px;
+					padding: 6px 14px;
+					margin: 4px 0px 4px 0px;
+					outline: none;
+					transition: background-color 150ms;
 				}
 
-				.sss-input-field:hover {
-					border: 1px solid ${settings.popupHighlightColor};
+				.sss-input-field:hover, .sss-input-field:focus {
+					background-color: var(--sss-input-hover-background);
 				}
 
-				${settings.useCustomPopupCSS === true ? settings.customPopupCSS : ""}
+				${useDefaultBackground ? `@media (prefers-color-scheme: dark) {
+					.sss-content {
+						color-scheme: dark;
+						--sss-background: #25272b;
+						--sss-text: #f1f3f4;
+						--sss-input-background: color-mix(in srgb, var(--sss-background), #000 30%);
+						--sss-input-hover-background: color-mix(in srgb, var(--sss-background), #000 40%);
+						--sss-shadow: 0 1px 3px rgba(0, 0, 0, 0.60), 0 4px 8px 3px rgba(0, 0, 0, 0.35);
+						--sss-action-filter: invert(1);
+					}
+				}` : ""}
 			`;
 		}
 
@@ -809,7 +934,8 @@ namespace PopupCreator
 				width = nPopupIconsPerRow * (settings.popupItemSize + 2 * settings.popupItemPadding);
 			}
 
-			return `width: ${width}px;`;
+			// Fractional separator margins can round up beyond the calculated row width.
+			return `width: ${Math.ceil(width) + 1}px; max-width: calc(var(--sss-viewport-width, 100vw) - ${2 * (VIEWPORT_MARGIN + settings.popupPaddingX)}px);`;
 		}
 
 		generateStylesheet_IconHover(settings: SSS.Settings): string
@@ -817,19 +943,10 @@ namespace PopupCreator
 			if (settings.popupItemHoverBehaviour === SSS.ItemHoverBehaviour.Highlight
 			 || settings.popupItemHoverBehaviour === SSS.ItemHoverBehaviour.HighlightAndMove)
 			{
-				let borderCompensation;
-				if (settings.popupItemHoverBehaviour === SSS.ItemHoverBehaviour.HighlightAndMove) {
-					const marginTopValue = Math.min(-3 - settings.popupItemVerticalPadding + 2, -2);	// equal or less than -2 to counter the border's 2px
-					borderCompensation = `margin-top: ${marginTopValue}px;`;
-				} else {
-					const paddingBottomValue = Math.max(3 + settings.popupItemVerticalPadding - 2, 0);	// must be positive to counter the border's 2px
-					borderCompensation = `padding-bottom: ${paddingBottomValue}px;`;
-				}
-
+				// Material state layer: translucent tint of the highlight color
 				return `
-					border-bottom: 2px ${settings.popupHighlightColor} solid;
-					border-radius: ${settings.popupItemBorderRadius == 0 ? 2 : settings.popupItemBorderRadius}px;
-					${borderCompensation}
+					background-color: color-mix(in srgb, ${settings.popupHighlightColor} 16%, transparent);
+					${settings.popupItemHoverBehaviour === SSS.ItemHoverBehaviour.HighlightAndMove ? "transform: translateY(-2px);" : ""}
 				`;
 			}
 			else if (settings.popupItemHoverBehaviour === SSS.ItemHoverBehaviour.Scale)
@@ -870,9 +987,10 @@ namespace PopupCreator
 					const sssEngine = engine as SSS.SearchEngine_SSS;
 					const sssIcon = sssIcons[sssEngine.id];
 
-					const iconImgSource = browser.extension.getURL(sssIcon.iconPath);
+					const iconImgSource = browser.runtime.getURL(sssIcon.iconPath);
 					const isInteractive = sssIcon.isInteractive !== false;	// undefined or true means it's interactive
 					icon = this.setupEngineIcon(sssEngine, iconImgSource, sssIcon.name, isInteractive, settings);
+					icon.classList.add("sss-action-icon");
 
 					if (sssEngine.id === "separator") {
 						icon.classList.add("separator");
@@ -901,7 +1019,7 @@ namespace PopupCreator
 		setupEngineIcon(engine: SSS.SearchEngine, iconImgSource: string, iconTitle: string, isInteractive: boolean, settings: SSS.Settings): HTMLImageElement
 		{
 			const icon: HTMLImageElement = document.createElement("img");
-			icon.src = iconImgSource;
+			if (iconImgSource) icon.src = iconImgSource;
 			icon.tabIndex = 0; // to allow cycling through the icons using "tab"
 
 			// if icon responds to mouse interaction
@@ -925,6 +1043,9 @@ namespace PopupCreator
 
 		setPopupPosition(settings: SSS.Settings, selection: ContentScript.SelectionData, mousePositionX: number, mousePositionY: number)
 		{
+			// clientWidth excludes a vertical scrollbar, unlike CSS viewport units.
+			const viewportWidth = document.documentElement.clientWidth;
+			this.content.style.setProperty("--sss-viewport-width", viewportWidth + "px");
 			const bounds = this.content.getBoundingClientRect();
 			const width = bounds.width;
 			const height = bounds.height;
@@ -962,13 +1083,13 @@ namespace PopupCreator
 
 			// don't const popup be outside of the viewport
 
-			const margin: number = 5;
+			const margin: number = VIEWPORT_MARGIN;
 
 			// left/right checks
 			if (positionLeft < margin + window.scrollX) {
 				positionLeft = margin + window.scrollX;
 			} else {
-				const clientWidth = Math.max(document.body.clientWidth, document.documentElement.clientWidth);
+				const clientWidth = viewportWidth;
 				if (positionLeft + width + margin > clientWidth + window.scrollX) {
 					positionLeft = clientWidth + window.scrollX - width - margin;
 				}
@@ -1002,6 +1123,11 @@ namespace PopupCreator
 
 		setFocusOnInputFieldText()
 		{
+			if (!this.isShown()) return;
+			if (this.content.style.visibility === "hidden") {
+				this.focusInputAfterStyles = true;
+				return;
+			}
 			this.inputField.focus();
 		}
 
@@ -1020,13 +1146,20 @@ namespace PopupCreator
 			return this.content.style.display === "inline-block";
 		}
 
+		getFocusedElement(): Element | null
+		{
+			return this.popupShadowRoot.activeElement;
+		}
+
 		show()
 		{
+			if (this.stylesFailed) return;
 			this.content.style.setProperty("display", "inline-block");
 		}
 
 		hide()
 		{
+			this.focusInputAfterStyles = false;
 			this.content.style.setProperty("display", "none");
 		}
 	}

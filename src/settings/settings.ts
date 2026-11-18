@@ -214,7 +214,7 @@ namespace SSS_Settings
 		var img = new Image();
 		img.crossOrigin = "Anonymous";
 		img.onload = _ => {
-			const maxSize = 48;
+			const maxSize = 192;
 			let width;
 			let height;
 			let xPos = 0;
@@ -590,6 +590,18 @@ namespace SSS_Settings
 
 		page.exportSettingsToFileButton.onclick = _ =>
 		{
+			if (BrowserCompat.isChrome) {
+				const blob = runActionOnDietSettings(settings, value => new Blob([JSON.stringify(value)], { type: "application/json" }));
+				const url = URL.createObjectURL(blob);
+				const anchor = document.createElement("a");
+				anchor.href = url;
+				anchor.download = "SSS settings backup (" + new Date().toJSON().replace(/:/g, ".") + ").json";
+				document.body.appendChild(anchor);
+				anchor.click();
+				anchor.remove();
+				setTimeout(() => URL.revokeObjectURL(url), 60000);
+				return;
+			}
 			// to save as a file we need the "downloads permission"
 			browser.permissions.request({ permissions: ["downloads"] }).then(wasPermissionGranted =>
 			{
@@ -610,6 +622,22 @@ namespace SSS_Settings
 				});
 			});
 		};
+		if (!BrowserCompat.supportsBrowserSearch) {
+			page.importBrowserEnginesButton.hidden = true;
+			page.importBrowserEnginesButton.style.display = "none";
+			const notice = document.createElement("p");
+			notice.textContent = "Chrome: add search engines using URL templates. Firefox browser-managed engines are preserved in backups but cannot run here.";
+			page.importBrowserEnginesButton.parentNode.insertBefore(notice, page.importBrowserEnginesButton);
+
+			const saveDesc = page.saveSettingsToSyncButton?.closest(".setting")?.querySelector(".setting-description");
+			if (saveDesc) {
+				saveDesc.innerHTML = 'Saves all SSS options and engines in browser sync. This does not force upload, so you may have to wait for your browser to sync. Syncing only happens if you are signed in to your browser and sync of extensions is enabled. <span class="warn-when-over-storage-limit">Beware that storage size should be below 100KB for this to work. If above the limit, start by deleting any "data:image" URLs in your engines, or any other extremely long URLs.</span> Estimate size is not exact, so it may still work if above the limit, or fail if below it.';
+			}
+			const loadDesc = page.loadSettingsFromSyncButton?.closest(".setting")?.querySelector(".setting-description");
+			if (loadDesc) {
+				loadDesc.textContent = "Downloads previously saved SSS options and engines from browser sync. This will override all existing options and engines!";
+			}
+		}
 
 		// There are two elements for the import button: a button for display and the actual "real" button that lets the user pick the file.
 		// This is done because the file picker button can't be formatted and would look very ugly.
@@ -634,41 +662,40 @@ namespace SSS_Settings
 			});
 		};
 
-		// setup reset buttons for each option
+		// setup the "Reset to default" button at the bottom of each section, which resets all options in that section
 
-		for (const elem of document.querySelectorAll(".setting-reset"))
+		for (const resetButton of document.querySelectorAll(".section-reset-button") as NodeListOf<HTMLElement>)
 		{
-			const inputElements = elem.querySelectorAll("input");
-			if (inputElements.length == 0) continue;
+			resetButton.onclick = _ => {
+				const section = resetButton.closest(".section");
+				const sectionName = section.querySelector(".section-name").textContent;
 
-			inputElements[0].onclick = _ => {
-				const parent = elem.closest(".setting");
-				const formElement = parent.querySelector(".setting-input") as HTMLFormElement;
-				const settingName = formElement.name;
+				if (!confirm(`Really reset all options in "${sectionName}" to their default values?`)) return;
 
-				// register the change and save in storage
-				const defaultValue = defaultSettings[settingName];
-				settings[settingName] = defaultValue;
-				saveSettings({ [settingName]: defaultValue });
+				// register the changes and save in storage
+				const changes = {};
+				const formElements = section.querySelectorAll(".setting-input") as NodeListOf<HTMLFormElement>;
 
-				loadSettingValueIntoElement(formElement);
-			};
-		}
+				for (const formElement of formElements)
+				{
+					const settingName = formElement.name;
+					if (!(settingName in defaultSettings)) continue;
 
-		// sections' collapse/expand code
+					const defaultValue = defaultSettings[settingName];
+					settings[settingName] = defaultValue;
+					changes[settingName] = defaultValue;
 
-		for (const sectionNameElement of document.querySelectorAll(".section-name"))
-		{
-			// toggle entire section on clicking the title, and save in settings the resulting state (open/closed)
-			(sectionNameElement as HTMLElement).onclick = _ => {
-				if (settings.sectionsExpansionState === undefined) {
-					settings.sectionsExpansionState = {};
+					loadSettingValueIntoElement(formElement);
 				}
-				const isCollapsed = sectionNameElement.parentElement.classList.toggle("collapsed-section");
-				settings.sectionsExpansionState[sectionNameElement.parentElement.id] = !isCollapsed;
-				saveSettings({ sectionsExpansionState: settings.sectionsExpansionState });
+
+				saveSettings(changes);
+				calculateAndShowSettingsSize();
 			};
 		}
+
+		// side navigation: one section is shown at a time, picked from the nav (the URL hash names it)
+
+		setupSectionNavigation();
 
 		// show platform-specific sections (some info on the page is related to a specific OS and should only appear in that OS)
 
@@ -719,6 +746,8 @@ namespace SSS_Settings
 			} else {
 				document.body.classList.remove("dark");
 			}
+			// m3e theme tokens follow the system scheme unless data-theme forces one
+			document.documentElement.dataset.theme = enable ? "dark" : "light";
 		};
 
 		page.toggleDarkMode.onclick = _ => {
@@ -758,7 +787,7 @@ namespace SSS_Settings
 		};
 
 		// saves settings to Firefox Sync
-		page.saveSettingsToSyncButton.onclick = _ => {
+		page.saveSettingsToSyncButton.onclick = async _ => {
 			if (DEBUG) { log("saving!"); }
 
 			// remove useless stuff that doesn't need to be stored
@@ -771,12 +800,28 @@ namespace SSS_Settings
 				chunks["p"+chunkIndex] = settingsStr.substring(i, i + 1000);
 			}
 
-			browser.storage.sync.clear();
-			browser.storage.sync.set(chunks).then(
-				() => { if (DEBUG) { log("All settings and engines were saved in Sync!"); } },
-				() => { if (DEBUG) { log("Uploading to Sync failed! Is your network working? Are you under the 100KB size limit?"); } }
-			);
-			if (DEBUG) { log("saved in sync!", chunks); }
+			// write the new chunks first and only then remove leftover chunks from an older, larger save,
+			// so that a failed upload (e.g. quota exceeded) doesn't wipe the previously synced data
+			// (the button is disabled meanwhile so that overlapping saves can't delete each other's chunks)
+			page.saveSettingsToSyncButton.disabled = true;
+			try {
+				const existingKeys = Object.keys(await browser.storage.sync.get(null));
+				await browser.storage.sync.set(chunks);
+
+				// leftover chunks are harmless (parseSyncChunksList copes with them), so failing to remove them is not an error
+				const staleKeys = existingKeys.filter(key => !Object.prototype.hasOwnProperty.call(chunks, key));
+				if (staleKeys.length > 0) {
+					await browser.storage.sync.remove(staleKeys).catch(error => {
+						if (DEBUG) { log("Saved new chunks in Sync, but failed to remove old ones.", error); }
+					});
+				}
+				if (DEBUG) { log("All settings and engines were saved in Sync!", chunks); }
+			} catch (error) {
+				if (DEBUG) { log("Uploading to Sync failed!", error); }
+				alert("Saving to sync failed. Your previously synced data was not changed. Check that you are under the 100KB size limit and that your browser's sync is available.");
+			} finally {
+				page.saveSettingsToSyncButton.disabled = false;
+			}
 		};
 
 		// buttons with confirmation
@@ -806,7 +851,8 @@ namespace SSS_Settings
 
 		page.loadSettingsFromSyncButton.onclick = _ =>
 		{
-			if (confirm("Really load all settings from Firefox Sync?"))
+			const syncProvider = BrowserCompat.isChrome ? "browser sync" : "Firefox Sync";
+			if (confirm(`Really load all settings from ${syncProvider}?`))
 			{
 				browser.storage.sync.get().then(chunks => {
 					if (DEBUG) { log(chunks); }
@@ -849,7 +895,8 @@ namespace SSS_Settings
 		// (For example if the last save uploaded only chunks p0 and p1, but Sync already had chunks p0, p1 AND p2 in there.)
 		// Due to this, parsing the concatenated chunks would result in JSON errors, so if they happen we try removing the last chunks
 		// one by one until parsing works.
-		// The origin of the bug was fixed by clearing all Sync storage before setting new data.
+		// The origin of the bug was fixed by removing the leftover chunks after setting new data (we used to clear all Sync storage first,
+		// but that wiped the previous data if the upload failed). If removing them fails, this fallback still handles the leftovers.
 		let settingsStr: string = "";
 		let parsedSettings = null;
 
@@ -931,8 +978,10 @@ namespace SSS_Settings
 				tableRow.onclick = ev => {
 					if (currentlyExpandedEngineOptions !== null && currentlyExpandedEngineOptions !== optionsRow) {
 						currentlyExpandedEngineOptions.style.display = "none";
+						currentlyExpandedEngineOptions.parentElement.classList.remove("expanded");
 					}
-					optionsRow.style.display = "initial";
+					optionsRow.style.display = "flex";
+					tableRow.classList.add("expanded");
 					currentlyExpandedEngineOptions = optionsRow;
 					ev.stopPropagation();
 				};
@@ -946,6 +995,7 @@ namespace SSS_Settings
 					// hide if neither itself or any parent is a table row
 					if ((ev.target as Element).closest(".engine-table-row") === null) {
 						currentlyExpandedEngineOptions.style.display = "none";
+						currentlyExpandedEngineOptions.parentElement.classList.remove("expanded");
 					}
 				}
 			};
@@ -969,21 +1019,57 @@ namespace SSS_Settings
 			});
 		}
 
-		// collapse or expand sections
-
-		if (settings.sectionsExpansionState !== undefined)
-		{
-			for (const sectionId of Object.keys(settings.sectionsExpansionState))
-			{
-				const classList = document.querySelector("#" + sectionId).classList;
-				const isExpanded = settings.sectionsExpansionState[sectionId];
-				classList.toggle("collapsed-section", !isExpanded);
-			}
-		}
-
 		// set dark/light mode
 
 		page.toggleDarkMode.setDarkModeState(settings.useDarkModeInOptionsPage);
+	}
+
+	const LAST_SECTION_STORAGE_KEY = "sss-options-last-section";
+
+	function setupSectionNavigation()
+	{
+		const sections = Array.from(document.querySelectorAll(".section")) as HTMLElement[];
+		const navItems = Array.from(document.querySelectorAll(".nav-item")) as HTMLAnchorElement[];
+
+		const sectionIdFromHash = () => location.hash.length > 1 ? "section_" + location.hash.slice(1) : null;
+
+		const showSection = (sectionId: string | null) => {
+			const section = sections.find(s => s.id === sectionId) ?? sections[0];
+
+			for (const s of sections) {
+				s.classList.toggle("active", s === section);
+			}
+			for (const item of navItems) {
+				const isCurrent = item.dataset.section === section.id;
+				item.classList.toggle("active", isCurrent);
+				if (isCurrent) {
+					item.setAttribute("aria-current", "page");
+					// keeps the item visible when the nav is a horizontally scrolling row (narrow windows)
+					item.scrollIntoView({ block: "nearest", inline: "nearest" });
+				} else {
+					item.removeAttribute("aria-current");
+				}
+			}
+
+			// remember the last visited section for the next time the page is opened without a hash
+			try { localStorage.setItem(LAST_SECTION_STORAGE_KEY, section.id); } catch { }
+		};
+
+		// switch right away on click; the hashchange that follows keeps back/forward and deep links working
+		for (const item of navItems) {
+			item.addEventListener("click", () => showSection(item.dataset.section));
+		}
+
+		window.addEventListener("hashchange", () => {
+			showSection(sectionIdFromHash());
+			window.scrollTo({ top: 0 });
+		});
+
+		let initialSectionId = sectionIdFromHash();
+		if (initialSectionId === null) {
+			try { initialSectionId = localStorage.getItem(LAST_SECTION_STORAGE_KEY); } catch { }
+		}
+		showSection(initialSectionId);
 	}
 
 	function saveElementValueToSettings(item: HTMLFormElement, didElementValueChange: boolean = false): boolean
@@ -1196,7 +1282,9 @@ namespace SSS_Settings
 			{
 				const engineDescription = document.createElement("div");
 				engineDescription.className = "engine-uneditable engine-description-small";
-				engineDescription.textContent = "[Browser] Engine imported from the browser.";
+				engineDescription.textContent = BrowserCompat.supportsBrowserSearch
+					? "[Browser] Engine imported from the browser."
+					: "[Unsupported in Chrome] Firefox browser-managed engine. Preserved for export; use a URL engine instead.";
 				engineRow.appendChild(engineDescription);
 			}
 			else if (engine.type === SSS.SearchEngineType.Group)
@@ -1250,14 +1338,18 @@ namespace SSS_Settings
 		if (engine.type === SSS.SearchEngineType.SSS) {
 			// special SSS icons have data that never changes, so just get it from constants
 			const sssIcon = sssIcons[(engine as SSS.SearchEngine_SSS).id];
-			iconImgSource = browser.extension.getURL(sssIcon.iconPath);
+			iconImgSource = browser.runtime.getURL(sssIcon.iconPath);
 		} else {
 			iconImgSource = (engine as SSS.SearchEngine_NonSSS).iconUrl;
 		}
 
 		// Sets the icon for a search engine.
+		if (!iconImgSource) {
+			iconImg.removeAttribute("src");
+			return;
+		}
 		// "data:" links are data, URLs are cached as data too.
-		if (iconImgSource.startsWith("data:") || iconImgSource.startsWith("moz-extension:")) {
+		if (iconImgSource.startsWith("data:") || iconImgSource.startsWith("moz-extension:") || iconImgSource.startsWith("chrome-extension:")) {
 			iconImg.src = iconImgSource;
 		} else if (settings.searchEnginesCache[iconImgSource] === undefined && iconImgSource) {
 			iconImg.src = iconImgSource;
@@ -1268,7 +1360,7 @@ namespace SSS_Settings
 				saveSettings({ searchEnginesCache: settings.searchEnginesCache });
 			});
 		} else {
-			iconImg.src = settings.searchEnginesCache[iconImgSource];
+			if (settings.searchEnginesCache[iconImgSource]) iconImg.src = settings.searchEnginesCache[iconImgSource];
 		}
 	}
 
@@ -1333,7 +1425,7 @@ namespace SSS_Settings
 		{
 			const noExtraOptionsLabel = document.createElement("label");
 			noExtraOptionsLabel.textContent = "No extra options.";
-			noExtraOptionsLabel.style.color = "#999";
+			noExtraOptionsLabel.className = "engine-options-empty";
 			engineOptions.appendChild(noExtraOptionsLabel);
 		}
 
@@ -1541,9 +1633,10 @@ namespace SSS_Settings
 	function setIconUrlInput(engine, iconLinkInput, icon)
 	{
 		engine.iconUrl = iconLinkInput.value.trim();
-		icon.src = engine.iconUrl;
+		const cached = settings.searchEnginesCache[engine.iconUrl];
+		icon.src = cached || engine.iconUrl;
 		// if not a data link already, try downloading the image and cache it as one
-		if (!engine.iconUrl.startsWith("data:")) {
+		if (engine.iconUrl && !cached && !engine.iconUrl.startsWith("data:")) {
 			getDataUriFromImgUrl(engine.iconUrl, base64Img => {
 				icon.src = base64Img;
 				settings.searchEnginesCache[engine.iconUrl] = base64Img;
@@ -1624,15 +1717,32 @@ namespace SSS_Settings
 		return parent;
 	}
 
+	// Material Icons "close" (Apache 2.0)
+	const DELETE_ICON_PATH = "M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z";
+
+	function createIconSvg(pathData: string): SVGSVGElement
+	{
+		const svgNamespace = "http://www.w3.org/2000/svg";
+		const svg = document.createElementNS(svgNamespace, "svg");
+		svg.setAttribute("viewBox", "0 0 24 24");
+		svg.setAttribute("aria-hidden", "true");
+		const path = document.createElementNS(svgNamespace, "path");
+		path.setAttribute("d", pathData);
+		svg.appendChild(path);
+		return svg;
+	}
+
 	// sets the delete button for a search engine in the engines table
 	function createElement_DeleteButton(i: number): HTMLDivElement
 	{
 		const parent = createElement_DeleteButtonDiv();
 
-		const deleteButton = document.createElement("input");
+		const deleteButton = document.createElement("button");
 		deleteButton.type = "button";
-		deleteButton.value = "✖";
+		deleteButton.className = "engine-delete-button";
 		deleteButton.title = "Delete";
+		deleteButton.setAttribute("aria-label", "Delete");
+		deleteButton.appendChild(createIconSvg(DELETE_ICON_PATH));
 		deleteButton.onclick = _ => {
 			// Deleting an engine that belongs to one or more groups must also remove it from the groups, so we ask the user for confirmation.
 			const engineToDelete = settings.searchEngines[i];
@@ -1771,8 +1881,11 @@ namespace SSS_Settings
 
 	function getIconUrlFromSearchUrl(url)
 	{
-		if (settings.searchEngineIconsSource === SSS.SearchEngineIconsSource.FaviconKit) {
-			return "https://api.faviconkit.com/" + getDomainFromUrl(url) + "/64";
+		if (settings.searchEngineIconsSource === SSS.SearchEngineIconsSource.Google) {
+			const original = defaultSettings.searchEngines.find(engine => engine.type === SSS.SearchEngineType.Custom
+				&& (engine as SSS.SearchEngine_Custom).searchUrl === url) as SSS.SearchEngine_Custom;
+			if (original) return original.iconUrl;
+			return "https://www.google.com/s2/favicons?domain=" + encodeURIComponent(getDomainFromUrl(url)) + "&sz=64";
 		} else {
 			return "";
 		}
