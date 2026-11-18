@@ -11,7 +11,7 @@ const root = path.resolve(import.meta.dirname, '..');
 const results = path.join(root, 'test-results');
 await fs.mkdir(results, { recursive: true });
 const manifest = JSON.parse(await fs.readFile(path.join(root, 'dist/chrome/manifest.json'), 'utf8'));
-const zip = unzipSync(await fs.readFile(path.join(root, 'dist', `swift-selection-search-chrome-${manifest.version}.zip`)));
+const zip = unzipSync(await fs.readFile(path.join(root, 'dist', `snappy-selection-search-chrome-${manifest.version}.zip`)));
 const unpacked = await fs.mkdtemp(path.join(results, 'unpacked-'));
 for (const [name, bytes] of Object.entries(zip)) {
   const file = path.resolve(unpacked, name);

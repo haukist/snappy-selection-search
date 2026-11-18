@@ -98,7 +98,7 @@ if (process.argv.includes('--zip')) {
     }
   }
   await collect(out);
-  const zip = path.join(root, 'dist', `swift-selection-search-${target}-${manifest.version}.zip`);
+  const zip = path.join(root, 'dist', `snappy-selection-search-${target}-${manifest.version}.zip`);
   await fs.writeFile(zip, zipSync(files));
   console.log(`Packaged ${zip}`);
 }

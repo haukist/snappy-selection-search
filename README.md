@@ -1,21 +1,19 @@
-Swift Selection Search
+Snappy Selection Search
 =================
 
 -------------------------------
 
-## ⚠ NOTE: Development is on an indefinite break (Sorry!) ⚠
+## About this fork
 
-- Please use the issues page _only_ to report very problematic bugs you may find.
-- This project is not accepting pull requests.
-- I do encourage you to work on your own version of SSS and publish it as an improved addon. Even for other browsers!
+Snappy Selection Search is a fork of [Swift Selection Search](https://github.com/CanisLupus/swift-selection-search) by Daniel Lobo, released under the MIT license. It is a separate add-on with its own name and add-on ID, and it is not affiliated with the original project.
 
-You can read more about this [here](https://github.com/CanisLupus/swift-selection-search/issues/230).
+The original project's development is on an indefinite break and it does not accept pull requests. You can read more about this [here](https://github.com/CanisLupus/swift-selection-search/issues/230).
 
 -------------------------------
 
 ## Description
 
-Swift Selection Search (SSS) is a Firefox add-on for quickly searching for some text in a page using your favorite search engines.
+Snappy Selection Search (SSS) is a Firefox and Chrome extension for quickly searching for some text in a page using your favorite search engines.
 
 Select text on a page and a small popup box with search engines will appear above your cursor. Press one and you'll automatically search for the selected text using that engine!
 
@@ -23,7 +21,7 @@ SSS is configurable. You can define which search engines appear on the popup, th
 
 You also get an optional context menu for searching with any of your engines. You can disable this extra menu in the options if you want. You also have the option of disabling the popup itself and leaving only this context menu. Your choice. :)
 
-SSS is available at the Mozilla Add-ons website, here:
+Firefox (Manifest V2, Firefox 128 or later) and Chrome (Manifest V3, Chrome 116 or later) builds are both supported; see [Browser builds](#browser-builds-this-fork) below for how to build and load them. This fork is not published on the Mozilla Add-ons website or the Chrome Web Store yet. The original Swift Selection Search add-on is available on Mozilla Add-ons, here:
 
 https://addons.mozilla.org/firefox/addon/swift-selection-search
 
@@ -40,7 +38,7 @@ npm run package:chrome
 
 The builds share TypeScript sources and write only to `dist/firefox` and
 `dist/chrome`. The Chrome package is
-`dist/swift-selection-search-chrome-<version>.zip`, with `manifest.json` at its
+`dist/snappy-selection-search-chrome-<version>.zip`, with `manifest.json` at its
 root. Generated JavaScript, dependencies and build output are not committed.
 
 For Chrome, open `chrome://extensions`, enable Developer mode, choose **Load
@@ -51,7 +49,8 @@ Chrome 116 or later; current Windows Chrome Stable is the tested target.
 
 For Firefox, open `about:debugging#/runtime/this-firefox`, choose **Load Temporary
 Add-on**, and select `dist/firefox/manifest.json`. The Firefox build retains
-Manifest V2 and the existing extension ID.
+Manifest V2 and uses the add-on ID `snappy-selection-search@haukist`, which differs
+from the original add-on's ID, so settings are not shared with it.
 
 Chrome supports custom URL engines, groups, selection popup, context menu,
 shortcuts and settings backups. Importing Firefox's installed browser engines is
@@ -111,7 +110,7 @@ Firstly, since WebExtensions are made in JavaScript, we need to be able to conve
 
 Now you have .js files, so you can use SSS as a WebExtension. Yay!
 
-- For short development or just curiosity, the simpler way to try SSS is the [about:debugging#addons](about:debugging#addons) page in Firefox. Press the "Load Temporary Add-on" button, select a file in the Swift Selection Search "src" directory (for example *manifest.json*), and it will load the add-on until the browser is closed. Changes to most code require reloading the add-on again.
+- For short development or just curiosity, the simpler way to try SSS is the [about:debugging#addons](about:debugging#addons) page in Firefox. Press the "Load Temporary Add-on" button, select a file in the Snappy Selection Search "src" directory (for example *manifest.json*), and it will load the add-on until the browser is closed. Changes to most code require reloading the add-on again.
 
 - For more prolonged development and/or packaging, such as auto reloading after each change, please follow Mozilla's instructions [here](https://developer.mozilla.org/Add-ons/WebExtensions/Getting_started_with_web-ext) to install and use the *web-ext* tool.
 

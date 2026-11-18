@@ -19,7 +19,7 @@ var iconv;	// avoid TS compilation errors but still get working JS code
 namespace SSS
 {
 	/* ==================================== */
-	/* ====== Swift Selection Search ====== */
+	/* ====== Snappy Selection Search ====== */
 	/* ==================================== */
 
 	// Set to true if you want to see SSS's logs in Firefox's "Browser Console".
@@ -556,7 +556,7 @@ namespace SSS
 		setup_Popup();
 
 		if (isFirstLoad) {
-			if (DEBUG) { log("Swift Selection Search has started!"); }
+			if (DEBUG) { log("Snappy Selection Search has started!"); }
 			isFirstLoad = false;
 		}
 	}
@@ -631,7 +631,7 @@ namespace SSS
 				const regex = new RegExp(regexStr);
 				websiteRegexes.push(regex);
 			} catch (e) {
-				console.warn("[WARNING] [Swift Selection Search]\nRegex parse error in \"Website blocklist\". Problematic regex is:\n\n\t" + website + "\n\n" + e);
+				console.warn("[WARNING] [Snappy Selection Search]\nRegex parse error in \"Website blocklist\". Problematic regex is:\n\n\t" + website + "\n\n" + e);
 			}
 		}
 
