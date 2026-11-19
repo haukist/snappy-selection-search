@@ -18,7 +18,7 @@ class Event {
 }
 function background(initial = {}, gate = Promise.resolve()) {
   let storage = structuredClone(initial);
-  const created = [], menus = new Map(), injections = [];
+  const created = [], menus = new Map(), injections = [], tabMessages = [];
   const onMessage = new Event(), onChanged = new Event();
   const browser = {
     runtime: { id: 'test', getManifest: () => ({ manifest_version: 3 }), getURL: name => `chrome-extension://test/${name}`, onMessage, onInstalled: new Event(), onStartup: new Event() },
@@ -30,12 +30,12 @@ function background(initial = {}, gate = Promise.resolve()) {
       assert(options.id !== undefined); assert(!('icons' in options));
       assert(!menus.has(options.id), 'duplicate menu id'); menus.set(options.id, options); done(); return options.id;
     } },
-    commands: { onCommand: new Event() }, webNavigation: { onDOMContentLoaded: new Event() },
+    commands: { onCommand: new Event() }, webNavigation: { onDOMContentLoaded: new Event(), onHistoryStateUpdated: new Event(), onReferenceFragmentUpdated: new Event() },
     tabs: { query: async () => [{ id: 1, index: 0, windowId: 1, url: 'https://fixture.test/', active: true }],
       get: async () => ({ id: 1, url: 'https://fixture.test/' }),
       create: async options => { created.push(options); return { id: created.length + 1, index: 0, windowId: 1 }; },
       update: async (id, options) => { created.push(options); return { id }; },
-      sendMessage: async () => 'alive', remove: async () => {},
+      sendMessage: async (tabId, message, options) => { tabMessages.push({ tabId, message, options }); return 'alive'; }, remove: async () => {},
     },
     windows: { create: async options => { created.push(options); return { id: 1 }; } },
   };
@@ -48,7 +48,7 @@ function background(initial = {}, gate = Promise.resolve()) {
     const handled = onMessage.listeners[0]({ type, ...extra }, sender, response => { clearTimeout(timer); resolve(response); });
     if (handled !== true) { clearTimeout(timer); resolve(undefined); }
   });
-  return { browser, context, created, menus, injections, message, stored: () => storage };
+  return { browser, context, created, menus, injections, tabMessages, message, stored: () => storage };
 }
 const contentScript = { id: 'test', url: 'https://fixture.test/', tab: { id: 1 } };
 const custom = (id = 'local') => ({ uniqueId: id, type: 'custom', name: id, searchUrl: 'https://results.test/?q={searchTerms}', isEnabled: true, isEnabledInContextMenu: true, iconUrl: '' });
@@ -135,6 +135,33 @@ test('content scripts cannot supply engine definitions, unknown behaviours or se
   }
   assert.equal(await bg.message('getPopupSettings', {}, { id: 'other-extension', url: 'https://fixture.test/' }), undefined);
   assert.equal((await bg.message('getPopupSettings', {}, contentScript)).settings.searchEngines.length, 1);
+});
+
+test('website blocklist expands every wildcard and is re-checked after same-document navigation', async () => {
+  const bg = background();
+  const defaults = (await bg.message('getDataForSettingsPage')).defaultSettings;
+  await bg.browser.storage.local.set({ ...defaults, websiteBlocklist: ['*.example.com/*', '*bank*', 'exact.test', '/^regex\\.test\\/private/'].join('\n') });
+  await bg.message('getPopupSettings');
+  const blocked = async url => {
+    bg.tabMessages.length = 0;
+    bg.browser.webNavigation.onHistoryStateUpdated.listeners[0]({ tabId: 7, frameId: 0, url });
+    await new Promise(resolve => setTimeout(resolve, 10));
+    const activation = bg.tabMessages.find(entry => entry.message.type === 'activate');
+    assert(activation, url);
+    assert.equal(activation.tabId, 7);
+    assert.equal(Object.keys(activation.options).length, 0);	// no frameId: every frame of the tab
+    return activation.message.isPageBlocked;
+  };
+  assert.equal(await blocked('https://www.example.com/inbox'), true);
+  assert.equal(await blocked('https://mybank.com/login'), true);
+  assert.equal(await blocked('https://exact.test/anything'), true);
+  assert.equal(await blocked('https://regex.test/private/x'), true);
+  assert.equal(await blocked('https://example.com/'), false);
+  assert.equal(await blocked('https://regex.test/public'), false);
+  bg.tabMessages.length = 0;
+  bg.browser.webNavigation.onReferenceFragmentUpdated.listeners[0]({ tabId: 7, frameId: 3, url: 'https://www.example.com/#x' });
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(bg.tabMessages.length, 0, 'subframe navigations do not re-activate the tab');
 });
 
 test('rapid settings writes serialize menu rebuilding and worker recreation restores saved state', async () => {

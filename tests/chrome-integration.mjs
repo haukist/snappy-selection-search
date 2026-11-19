@@ -218,6 +218,37 @@ try {
     await search(settings.searchEngines[0], 'opening', openingBehaviour);
   }
   record('all seven result-opening modes create or update real tabs/windows');
+  // Website blocklist: a same-document (SPA) navigation onto a blocked path disables both the popup and
+  // the always-on engine shortcuts; navigating back re-enables them.
+  const setAndWait = async changes => {
+    await options.evaluate(changes => browser.storage.local.set(changes), changes);
+    await options.waitForFunction(async changes => {
+      const { settings } = await browser.runtime.sendMessage({ type: 'getPopupSettings' });
+      return Object.entries(changes).every(([key, value]) => settings[key] === value);
+    }, changes);
+    await options.waitForTimeout(200);
+  };
+  await existing.goto(origin + '/plain');
+  await existing.bringToFront();
+  await select(existing);
+  await setAndWait({ websiteBlocklist: `${new URL(origin).host}/spa-blocked*`, useEngineShortcutWithoutPopup: true });
+  await existing.evaluate(() => history.pushState({}, '', '/spa-blocked/page'));
+  await options.waitForTimeout(300);
+  await existing.locator('#selection').dblclick({ position: { x: 25, y: 8 } });
+  baseline = requests.length;
+  await existing.keyboard.press('g');
+  await options.waitForTimeout(300);
+  assert.equal(requests.length, baseline, 'blocked page must not run engine shortcuts');
+  assert.equal(await existing.evaluate(() => getSelection().toString().length > 0), true);
+  assert.equal(await options.evaluate(async tabId => (await chrome.scripting.executeScript({ target: { tabId }, func: () => {
+    const popup = document.querySelector('sss-popup');
+    return !!popup && popup.isShown();
+  } }))[0].result, fixtureTab), false, 'blocked page must not show the popup');
+  await existing.evaluate(() => history.pushState({}, '', '/plain'));
+  await options.waitForTimeout(300);
+  await select(existing);
+  record('website blocklist wildcards apply after SPA navigation and also block engine shortcuts');
+  await setAndWait({ websiteBlocklist: '', useEngineShortcutWithoutPopup: settings.useEngineShortcutWithoutPopup });
   const layoutSettings = structuredClone(data.defaultSettings);
   layoutSettings.popupDelay = 0;
   layoutSettings.popupAnimationDuration = 0;

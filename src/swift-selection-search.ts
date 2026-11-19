@@ -510,6 +510,10 @@ namespace SSS
 	browser.webNavigation.onDOMContentLoaded.addListener(details => afterReady(() => {
 		if (sss.settings.popupOpenBehaviour !== PopupOpenBehaviour.Off || sss.settings.useEngineShortcutWithoutPopup) return onDOMContentLoaded(details);
 	}));
+	// Single-page apps change the URL without loading a new document, so re-check the blocklist.
+	const onSameDocumentNavigation = details => afterReady(() => onUrlChangedWithoutLoad(details));
+	browser.webNavigation.onHistoryStateUpdated.addListener(onSameDocumentNavigation);
+	browser.webNavigation.onReferenceFragmentUpdated.addListener(onSameDocumentNavigation);
 	browser.runtime.onStartup.addListener(() => afterReady(() => setup_Popup()));
 	ready = initializeBackground();
 	ready.catch(getErrorHandler("Error loading settings."));
@@ -633,7 +637,7 @@ namespace SSS
 			else if (website.includes("*"))
 			{
 				regexStr = escapeRegexString(website);
-				regexStr = "^" + regexStr.replace("\\*", "(.*?)");	// ^ matches start of string, * are replaced by a non greedy match for "any characters"
+				regexStr = "^" + regexStr.split("\\*").join("(.*?)");	// ^ matches start of string, every * is replaced by a non greedy match for "any characters"
 			}
 			else
 			{
@@ -828,7 +832,15 @@ namespace SSS
 		}, getErrorHandler("Error querying tabs."));
 	}
 
-	function activateTab(tab: browser.tabs.Tab, frameId?: number)
+	function onUrlChangedWithoutLoad(details: { tabId: number, frameId: number, url: string })
+	{
+		// Blocking depends only on the top-level URL, and only matters if something is blocked at all.
+		if (details.frameId !== 0 || details.tabId < 0 || sss.blockedWebsitesCache.length === 0) return;
+		if (sss.settings.popupOpenBehaviour === PopupOpenBehaviour.Off && !sss.settings.useEngineShortcutWithoutPopup) return;
+		activateTab({ id: details.tabId, url: details.url });	// all frames of the tab
+	}
+
+	function activateTab(tab: Pick<browser.tabs.Tab, "id" | "url">, frameId?: number)
 	{
 		browser.tabs.sendMessage(tab.id, {
 			type: "activate",
@@ -837,7 +849,7 @@ namespace SSS
 		}, frameId === undefined ? {} : { frameId }).then(() => {}, () => {});	// suppress errors
 	}
 
-	function isPageBlocked(tab: browser.tabs.Tab): boolean
+	function isPageBlocked(tab: Pick<browser.tabs.Tab, "url">): boolean
 	{
 		if (sss.blockedWebsitesCache === undefined) return false;	// can happen when reloading extension in about:debugging
 		if (sss.blockedWebsitesCache.length == 0) return false;

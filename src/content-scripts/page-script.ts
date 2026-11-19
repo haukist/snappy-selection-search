@@ -68,6 +68,7 @@ namespace ContentScript
 	let mousePositionY: number = 0;
 	let canMiddleClickEngine: boolean = true;
 	let activationSettings: SSS.ActivationSettings = null;
+	let isPageBlocked: boolean = false;	// "Website blocklist": no popup and no engine shortcuts here
 	let settings: SSS.Settings = null;
 	let sssIcons: { [id: string] : SSS.SSSIconDefinition; } = null;
 	let popupShowTimeout: number = null;
@@ -104,7 +105,7 @@ namespace ContentScript
 				break;
 
 			case "showPopup":
-				if (saveCurrentSelection()) {
+				if (activationSettings !== null && !isPageBlocked && saveCurrentSelection()) {
 					showPopupForSelection(null, true);
 				}
 				break;
@@ -151,23 +152,24 @@ namespace ContentScript
 		}
 	}
 
-	function activate(_activationSettings: SSS.ActivationSettings, isPageBlocked: boolean)
+	function activate(_activationSettings: SSS.ActivationSettings, _isPageBlocked: boolean)
 	{
 		activationSettings = _activationSettings;
+		isPageBlocked = _isPageBlocked === true;
 
 		// now register with events based on user settings
 
-		if (activationSettings.popupLocation === SSS.PopupLocation.Cursor) {
-			document.addEventListener("mousemove", onMouseUpdate);
-			document.addEventListener("mouseenter", onMouseUpdate);
-		}
-
-		if (activationSettings.useEngineShortcutWithoutPopup) {
-			document.documentElement.addEventListener("keydown", onKeyDown);
-		}
-
 		if (!isPageBlocked)
 		{
+			if (activationSettings.popupLocation === SSS.PopupLocation.Cursor) {
+				document.addEventListener("mousemove", onMouseUpdate);
+				document.addEventListener("mouseenter", onMouseUpdate);
+			}
+
+			if (activationSettings.useEngineShortcutWithoutPopup) {
+				document.documentElement.addEventListener("keydown", onKeyDown);
+			}
+
 			if (activationSettings.popupOpenBehaviour === SSS.PopupOpenBehaviour.Auto || activationSettings.popupOpenBehaviour === SSS.PopupOpenBehaviour.HoldAlt) {
 				selectionchange.start();
 				document.addEventListener("customselectionchange", onSelectionChange);
@@ -207,6 +209,7 @@ namespace ContentScript
 
 		// also clear any previously saved settings
 		activationSettings = null;
+		isPageBlocked = false;
 		settings = null;
 
 		if (DEBUG) { log("content script deactivated"); }
