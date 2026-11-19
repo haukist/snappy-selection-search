@@ -274,7 +274,7 @@ namespace SSS
 		return typeof source === "string" && (source.startsWith("data:image/") || source.startsWith(browser.runtime.getURL("")));
 	}
 
-	let uniqueIdToEngineDictionary: { [uniqueId: number] : SearchEngine; } = {};
+	let uniqueIdToEngineDictionary: { [uniqueId: string] : SearchEngine; } = {};
 
 	// Default state of all configurable options.
 	// Verified source URLs; bundled originals keep default icons sharp without network requests.
@@ -488,9 +488,14 @@ namespace SSS
 	// Register wake-up listeners synchronously, before loading any settings.
 	let ready: Promise<void>;
 	const afterReady = (action: () => any) => waitForReady().then(action).catch(getErrorHandler("Background operation failed."));
+	// Messages that content scripts (running inside web pages) may send.
+	const contentScriptMessages = ["getPopupSettings", "engineClick", "log"];
+	// Messages only extension pages (the options page) may send.
+	const extensionPageMessages = ["getDataForSettingsPage", "runBackwardsCompatibilityUpdates", "generateUniqueEngineId"];
 	browser.runtime.onMessage.addListener((msg, sender, respond) => {
-		if (!msg || msg.target === "offscreen") return;
-		if (["getPopupSettings", "engineClick", "log", "getDataForSettingsPage", "runBackwardsCompatibilityUpdates", "generateUniqueEngineId"].indexOf(msg.type) < 0) return;
+		if (!msg || msg.target === "offscreen" || !sender || sender.id !== browser.runtime.id) return;
+		const isFromExtensionPage = typeof sender.url === "string" && sender.url.startsWith(browser.runtime.getURL(""));
+		if (contentScriptMessages.indexOf(msg.type) < 0 && !(isFromExtensionPage && extensionPageMessages.indexOf(msg.type) >= 0)) return;
 		waitForReady().then(() => onContentScriptMessage(msg, sender, respond)).catch(error => {
 			console.warn("Message failed", error);
 			respond({ error: String(error) });
@@ -889,10 +894,17 @@ namespace SSS
 				callbackFunc(sss.settingsForContentScript);
 				break;
 
-			case "engineClick":
-				await onSearchEngineClick(msg.engine, msg.openingBehaviour, msg.selection, msg.href, null);
+			case "engineClick": {
+				// Content scripts run inside web pages, so never trust engine data from them: only accept the ID
+				// of an enabled engine from our own settings, and a known opening behaviour.
+				const engine = typeof msg.engineId === "string" && Object.prototype.hasOwnProperty.call(uniqueIdToEngineDictionary, msg.engineId)
+					? uniqueIdToEngineDictionary[msg.engineId] : undefined;
+				if (engine && engine.isEnabled && isOpenResultBehaviour(msg.openingBehaviour) && isValidUrl(msg.href)) {
+					await onSearchEngineClick(engine, msg.openingBehaviour, msg.selection, msg.href, null);
+				}
 				callbackFunc({ ok: true });
 				break;
+			}
 
 			case "log":
 				if (DEBUG) { log("[content script log]", msg.log); }
@@ -922,6 +934,29 @@ namespace SSS
 				break;
 
 			default: break;
+		}
+	}
+
+	// "const enum" values have no runtime object to enumerate, so list them once here.
+	const openResultBehaviours: string[] = [
+		OpenResultBehaviour.ThisTab, OpenResultBehaviour.NewTab, OpenResultBehaviour.NewBgTab,
+		OpenResultBehaviour.NewTabNextToThis, OpenResultBehaviour.NewBgTabNextToThis,
+		OpenResultBehaviour.NewWindow, OpenResultBehaviour.NewBgWindow,
+	];
+
+	function isOpenResultBehaviour(value: any): value is OpenResultBehaviour
+	{
+		return openResultBehaviours.indexOf(value) >= 0;
+	}
+
+	function isValidUrl(value: any): value is string
+	{
+		if (typeof value !== "string") return false;
+		try {
+			new URL(value);
+			return true;
+		} catch {
+			return false;
 		}
 	}
 

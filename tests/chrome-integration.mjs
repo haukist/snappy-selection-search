@@ -92,7 +92,7 @@ try {
   record('options sync descriptions refer to browser sync instead of Firefox Sync');
   const search = async (engine, selection = 'Chrome search 日本語', openingBehaviour = 'new-bg-tab') => {
     const count = requests.length;
-    await send('engineClick', { engine, selection, href: origin, openingBehaviour });
+    await send('engineClick', { engineId: engine.uniqueId, selection, href: origin, openingBehaviour });
     await options.waitForTimeout(200);
     assert(requests.slice(count).some(url => url.startsWith('/search?q=')), `Expected local search; requests: ${requests.slice(count)}`);
   };
@@ -174,11 +174,16 @@ try {
   assert.equal(await input.inputValue(), 'Chrome offscreen copy');
   record('offscreen clipboard requests serialize and paste the copied text');
   await select(existing);
-  await send('engineClick', { engine: { type: 'sss', id: 'copyToClipboard', isPlainText: true }, selection: 'Chrome', href: existing.url() });
+  // The background only runs engines from its own settings, so store the copy action first.
+  const copyEngine = { type: 'sss', uniqueId: 'copy', id: 'copyToClipboard', isPlainText: true, isEnabled: true, isEnabledInContextMenu: false };
+  await options.evaluate(engines => browser.storage.local.set({ searchEngines: engines }), [...settings.searchEngines, copyEngine]);
+  await options.waitForFunction(async () => (await browser.runtime.sendMessage({ type: 'getPopupSettings' })).settings.searchEngines.some(engine => engine.uniqueId === 'copy'));
+  await send('engineClick', { engineId: 'copy', selection: 'Chrome', href: existing.url(), openingBehaviour: 'this-tab' });
   await input.click();
   await existing.keyboard.press('Control+a');
   await existing.keyboard.press('Control+v');
   assert.equal((await input.inputValue()).trim(), 'Chrome');
+  await options.evaluate(engines => browser.storage.local.set({ searchEngines: engines }), settings.searchEngines);
   record('content-script plain-text copy preserves actual selected text');
   await existing.goto(origin + '/plain');
   await existing.bringToFront();

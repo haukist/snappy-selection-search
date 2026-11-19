@@ -36,7 +36,7 @@ namespace ContentScript
 	class EngineClickMessage extends Message
 	{
 		selection: string;
-		engine: SSS.SearchEngine;
+		engineId: string;	// the background looks the engine up in its own settings
 		href: string;
 		openingBehaviour: SSS.OpenResultBehaviour;
 
@@ -606,7 +606,7 @@ namespace ContentScript
 		const message = new EngineClickMessage();
 		// Due to shortcuts, we can search without a popup, so we only get the input field contents if popup is not null.
 		message.selection = popup !== null && settings.showSelectionTextField === true ? popup.getInputFieldText() : selection.text;
-		message.engine = engine;
+		message.engineId = engine?.uniqueId;
 
 		if (window.location) {
 			message.href = window.location.href;
