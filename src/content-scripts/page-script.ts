@@ -682,6 +682,13 @@ namespace PopupCreator
 {
 	export let onSearchEngineClick = null;
 	const VIEWPORT_MARGIN = 5;
+	const GENERIC_ENGINE_ICON_PATH = "res/sss-engine-icons/generic-engine.svg";
+
+	// Icon sources that can be displayed without any network request.
+	function isLocalIconSource(source: string): boolean
+	{
+		return typeof source === "string" && (source.startsWith("data:image/") || source.startsWith(browser.runtime.getURL("")));
+	}
 
 	// Chrome does not expose a custom-element registry in its isolated content world.
 	// Return a real DOM host from super(), then add our methods to that element.
@@ -1000,16 +1007,15 @@ namespace PopupCreator
 				else
 				{
 					const userEngine = engine as SSS.SearchEngine_NonSSS;
-					let iconImgSource: string;
-
-					if (userEngine.iconUrl.startsWith("data:")) {
-						iconImgSource = userEngine.iconUrl;	// use "URL" directly, as it's pure image data
-					} else {
-						const cachedIcon = settings.searchEnginesCache[userEngine.iconUrl];
-						iconImgSource = cachedIcon ? cachedIcon : userEngine.iconUrl;	// should have cached icon, but if not (for some reason) fall back to URL
-					}
+					const iconUrl = userEngine.iconUrl || "";
+					// Never load a remote URL here: this element lives in the visited page, so the
+					// request would tell the icon host which site the user is on. Without a local
+					// copy (data: image or extension resource), show a bundled generic icon.
+					const candidates = [iconUrl, settings.searchEnginesCache[iconUrl]];
+					const iconImgSource = candidates.find(isLocalIconSource) || browser.runtime.getURL(GENERIC_ENGINE_ICON_PATH);
 
 					icon = this.setupEngineIcon(userEngine, iconImgSource, userEngine.name, true, settings);
+					if (iconImgSource.endsWith(GENERIC_ENGINE_ICON_PATH)) icon.classList.add("sss-action-icon");
 				}
 
 				this.enginesContainer.appendChild(icon);

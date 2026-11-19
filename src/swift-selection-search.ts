@@ -266,6 +266,14 @@ namespace SSS
 		}
 	};
 
+	const GENERIC_ENGINE_ICON_PATH = "res/sss-engine-icons/generic-engine.svg";
+
+	// Icon sources that can be displayed without any network request.
+	function isLocalIconSource(source: string): boolean
+	{
+		return typeof source === "string" && (source.startsWith("data:image/") || source.startsWith(browser.runtime.getURL("")));
+	}
+
 	let uniqueIdToEngineDictionary: { [uniqueId: number] : SearchEngine; } = {};
 
 	// Default state of all configurable options.
@@ -995,16 +1003,9 @@ namespace SSS
 				icon = sssIcons[concreteEngine.id].iconPath;
 			}
 			else {
-				const iconUrl: string = (engine as SearchEngine_NonSSS).iconUrl;
-
-				if (iconUrl.startsWith("data:")) {
-					icon = iconUrl;
-				} else {
-					icon = sss.settings.searchEnginesCache[iconUrl];
-					if (icon === undefined) {
-						icon = iconUrl;
-					}
-				}
+				// Only use local sources (data: images or extension resources), never fetch a remote icon.
+				const iconUrl: string = (engine as SearchEngine_NonSSS).iconUrl || "";
+				icon = [iconUrl, sss.settings.searchEnginesCache[iconUrl]].find(isLocalIconSource) || GENERIC_ENGINE_ICON_PATH;
 			}
 
 			contextMenuOption.icons = { "32": icon };
