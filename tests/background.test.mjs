@@ -18,7 +18,7 @@ class Event {
 }
 function background(initial = {}, gate = Promise.resolve()) {
   let storage = structuredClone(initial);
-  const created = [], menus = new Map(), injections = [];
+  const created = [], menus = new Map(), injections = [], tabMessages = [];
   const onMessage = new Event(), onChanged = new Event();
   const browser = {
     runtime: { id: 'test', getManifest: () => ({ manifest_version: 3 }), getURL: name => `chrome-extension://test/${name}`, onMessage, onInstalled: new Event(), onStartup: new Event() },
@@ -30,24 +30,27 @@ function background(initial = {}, gate = Promise.resolve()) {
       assert(options.id !== undefined); assert(!('icons' in options));
       assert(!menus.has(options.id), 'duplicate menu id'); menus.set(options.id, options); done(); return options.id;
     } },
-    commands: { onCommand: new Event() }, webNavigation: { onDOMContentLoaded: new Event() },
+    commands: { onCommand: new Event() }, webNavigation: { onDOMContentLoaded: new Event(), onHistoryStateUpdated: new Event(), onReferenceFragmentUpdated: new Event() },
     tabs: { query: async () => [{ id: 1, index: 0, windowId: 1, url: 'https://fixture.test/', active: true }],
       get: async () => ({ id: 1, url: 'https://fixture.test/' }),
       create: async options => { created.push(options); return { id: created.length + 1, index: 0, windowId: 1 }; },
       update: async (id, options) => { created.push(options); return { id }; },
-      sendMessage: async () => 'alive', remove: async () => {},
+      sendMessage: async (tabId, message, options) => { tabMessages.push({ tabId, message, options }); return 'alive'; }, remove: async () => {},
     },
     windows: { create: async options => { created.push(options); return { id: 1 }; } },
   };
   const context = vm.createContext({ browser, chrome: { scripting: { executeScript: async options => { injections.push(options); return [{ frameId: 0, result: true }]; } } },
     console, URL, navigator: {}, setTimeout, clearTimeout });
   for (const name of ['libs/iconv-lite.js', 'browser-compat.js', 'search-variable-modifications.js', 'swift-selection-search.js']) vm.runInContext(read(name), context, { filename: name });
-  const message = (type, extra = {}) => new Promise((resolve, reject) => {
+  const optionsPage = { id: 'test', url: 'chrome-extension://test/settings/settings.html' };
+  const message = (type, extra = {}, sender = optionsPage) => new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`No response to ${type}`)), 5000);
-    onMessage.listeners[0]({ type, ...extra }, { id: 'test' }, response => { clearTimeout(timer); resolve(response); });
+    const handled = onMessage.listeners[0]({ type, ...extra }, sender, response => { clearTimeout(timer); resolve(response); });
+    if (handled !== true) { clearTimeout(timer); resolve(undefined); }
   });
-  return { browser, context, created, menus, injections, message, stored: () => storage };
+  return { browser, context, created, menus, injections, tabMessages, message, stored: () => storage };
 }
+const contentScript = { id: 'test', url: 'https://fixture.test/', tab: { id: 1 } };
 const custom = (id = 'local') => ({ uniqueId: id, type: 'custom', name: id, searchUrl: 'https://results.test/?q={searchTerms}', isEnabled: true, isEnabledInContextMenu: true, iconUrl: '' });
 
 test('existing search-variable examples run as automated assertions', () => {
@@ -89,24 +92,76 @@ test('Firefox-only engines survive import but never appear or execute, including
   assert.deepEqual(Array.from(popup.settings.searchEngines, engine => engine.uniqueId), ['local', 'group']);
   assert.equal(bg.stored().searchEngines[0].type, 'browser-search-api');
   assert(!Array.from(bg.menus.values()).some(menu => menu.title === 'firefox'));
-  await bg.message('engineClick', { engine: firefox, selection: 'hello', href: 'https://fixture.test/', openingBehaviour: 'new-bg-tab' });
+  const click = (engineId, selection) => bg.message('engineClick', { engineId, selection, href: 'https://fixture.test/', openingBehaviour: 'new-bg-tab' }, contentScript);
+  await click('firefox', 'hello');
   assert.equal(bg.created.length, 0);
-  await bg.message('engineClick', { engine: group, selection: 'hello world', href: 'https://fixture.test/', openingBehaviour: 'new-bg-tab' });
+  await click('group', 'hello world');
   assert.equal(bg.created.at(-1).url, 'https://results.test/?q=hello%20world');
-  const empty = { ...group, enginesUniqueIds: ['firefox'] };
   const count = bg.created.length;
-  await bg.message('engineClick', { engine: empty, selection: 'hello', href: 'https://fixture.test/', openingBehaviour: 'new-bg-tab' });
-  await bg.message('engineClick', { engine: custom(), selection: '  ', href: 'https://fixture.test/', openingBehaviour: 'new-bg-tab' });
+  await bg.browser.storage.local.set({ searchEngines: [firefox, custom(), group, { ...group, uniqueId: 'empty', enginesUniqueIds: ['firefox'] }] });
+  await click('empty', 'hello');
+  await click('local', '  ');
   assert.equal(bg.created.length, count);
 });
 
 test('search substitutions and non-UTF8 encodings execute through the real background', async () => {
   const bg = background();
-  await bg.message('getPopupSettings');
-  await bg.message('engineClick', { engine: { ...custom(), searchUrl: 'https://results.test/?q={searchTerms}&site={hostname}' }, selection: ' a b\n', href: 'https://fixture.test/path', openingBehaviour: 'new-bg-tab' });
+  const defaults = (await bg.message('getDataForSettingsPage')).defaultSettings;
+  await bg.browser.storage.local.set({ ...defaults, searchEngines: [
+    { ...custom('site'), searchUrl: 'https://results.test/?q={searchTerms}&site={hostname}' }, { ...custom('sjis'), encoding: 'shiftjis' }] });
+  await bg.message('engineClick', { engineId: 'site', selection: ' a b\n', href: 'https://fixture.test/path', openingBehaviour: 'new-bg-tab' }, contentScript);
   assert.equal(bg.created.at(-1).url, 'https://results.test/?q=a%20b&site=fixture.test');
-  await bg.message('engineClick', { engine: { ...custom(), encoding: 'shiftjis' }, selection: '日本語', href: 'https://fixture.test/', openingBehaviour: 'new-bg-tab' });
+  await bg.message('engineClick', { engineId: 'sjis', selection: '日本語', href: 'https://fixture.test/', openingBehaviour: 'new-bg-tab' }, contentScript);
   assert.equal(bg.created.at(-1).url, 'https://results.test/?q=%93%FA%96%7B%8C%EA');
+});
+
+test('content scripts cannot supply engine definitions, unknown behaviours or settings-page requests', async () => {
+  const bg = background();
+  const defaults = (await bg.message('getDataForSettingsPage')).defaultSettings;
+  await bg.browser.storage.local.set({ ...defaults, searchEngines: [custom(), { ...custom('off'), isEnabled: false }] });
+  const forged = { ...custom('local'), searchUrl: 'https://attacker.test/?q={searchTerms}', discardOnOpen: true };
+  const click = extra => bg.message('engineClick', { selection: 'secret', href: 'https://fixture.test/', openingBehaviour: 'new-bg-tab', ...extra }, contentScript);
+  await click({ engine: forged });
+  await click({ engineId: 'missing' });
+  await click({ engineId: 'off' });
+  await click({ engineId: '__proto__' });
+  await click({ engineId: 'local', openingBehaviour: 'javascript:alert(1)' });
+  await click({ engineId: 'local', href: 'not a url' });
+  assert.equal(bg.created.length, 0);
+  await click({ engineId: 'local', engine: forged });
+  assert.equal(bg.created.at(-1).url, 'https://results.test/?q=secret');
+  for (const type of ['getDataForSettingsPage', 'runBackwardsCompatibilityUpdates', 'generateUniqueEngineId']) {
+    assert.equal(await bg.message(type, { settings: { searchEngines: [] } }, contentScript), undefined, type);
+  }
+  assert.equal(await bg.message('getPopupSettings', {}, { id: 'other-extension', url: 'https://fixture.test/' }), undefined);
+  assert.equal((await bg.message('getPopupSettings', {}, contentScript)).settings.searchEngines.length, 1);
+});
+
+test('website blocklist expands every wildcard and is re-checked after same-document navigation', async () => {
+  const bg = background();
+  const defaults = (await bg.message('getDataForSettingsPage')).defaultSettings;
+  await bg.browser.storage.local.set({ ...defaults, websiteBlocklist: ['*.example.com/*', '*bank*', 'exact.test', '/^regex\\.test\\/private/'].join('\n') });
+  await bg.message('getPopupSettings');
+  const blocked = async url => {
+    bg.tabMessages.length = 0;
+    bg.browser.webNavigation.onHistoryStateUpdated.listeners[0]({ tabId: 7, frameId: 0, url });
+    await new Promise(resolve => setTimeout(resolve, 10));
+    const activation = bg.tabMessages.find(entry => entry.message.type === 'activate');
+    assert(activation, url);
+    assert.equal(activation.tabId, 7);
+    assert.equal(Object.keys(activation.options).length, 0);	// no frameId: every frame of the tab
+    return activation.message.isPageBlocked;
+  };
+  assert.equal(await blocked('https://www.example.com/inbox'), true);
+  assert.equal(await blocked('https://mybank.com/login'), true);
+  assert.equal(await blocked('https://exact.test/anything'), true);
+  assert.equal(await blocked('https://regex.test/private/x'), true);
+  assert.equal(await blocked('https://example.com/'), false);
+  assert.equal(await blocked('https://regex.test/public'), false);
+  bg.tabMessages.length = 0;
+  bg.browser.webNavigation.onReferenceFragmentUpdated.listeners[0]({ tabId: 7, frameId: 3, url: 'https://www.example.com/#x' });
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(bg.tabMessages.length, 0, 'subframe navigations do not re-activate the tab');
 });
 
 test('rapid settings writes serialize menu rebuilding and worker recreation restores saved state', async () => {

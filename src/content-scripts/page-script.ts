@@ -36,7 +36,7 @@ namespace ContentScript
 	class EngineClickMessage extends Message
 	{
 		selection: string;
-		engine: SSS.SearchEngine;
+		engineId: string;	// the background looks the engine up in its own settings
 		href: string;
 		openingBehaviour: SSS.OpenResultBehaviour;
 
@@ -68,6 +68,7 @@ namespace ContentScript
 	let mousePositionY: number = 0;
 	let canMiddleClickEngine: boolean = true;
 	let activationSettings: SSS.ActivationSettings = null;
+	let isPageBlocked: boolean = false;	// "Website blocklist": no popup and no engine shortcuts here
 	let settings: SSS.Settings = null;
 	let sssIcons: { [id: string] : SSS.SSSIconDefinition; } = null;
 	let popupShowTimeout: number = null;
@@ -104,7 +105,7 @@ namespace ContentScript
 				break;
 
 			case "showPopup":
-				if (saveCurrentSelection()) {
+				if (activationSettings !== null && !isPageBlocked && saveCurrentSelection()) {
 					showPopupForSelection(null, true);
 				}
 				break;
@@ -151,23 +152,24 @@ namespace ContentScript
 		}
 	}
 
-	function activate(_activationSettings: SSS.ActivationSettings, isPageBlocked: boolean)
+	function activate(_activationSettings: SSS.ActivationSettings, _isPageBlocked: boolean)
 	{
 		activationSettings = _activationSettings;
+		isPageBlocked = _isPageBlocked === true;
 
 		// now register with events based on user settings
 
-		if (activationSettings.popupLocation === SSS.PopupLocation.Cursor) {
-			document.addEventListener("mousemove", onMouseUpdate);
-			document.addEventListener("mouseenter", onMouseUpdate);
-		}
-
-		if (activationSettings.useEngineShortcutWithoutPopup) {
-			document.documentElement.addEventListener("keydown", onKeyDown);
-		}
-
 		if (!isPageBlocked)
 		{
+			if (activationSettings.popupLocation === SSS.PopupLocation.Cursor) {
+				document.addEventListener("mousemove", onMouseUpdate);
+				document.addEventListener("mouseenter", onMouseUpdate);
+			}
+
+			if (activationSettings.useEngineShortcutWithoutPopup) {
+				document.documentElement.addEventListener("keydown", onKeyDown);
+			}
+
 			if (activationSettings.popupOpenBehaviour === SSS.PopupOpenBehaviour.Auto || activationSettings.popupOpenBehaviour === SSS.PopupOpenBehaviour.HoldAlt) {
 				selectionchange.start();
 				document.addEventListener("customselectionchange", onSelectionChange);
@@ -207,6 +209,7 @@ namespace ContentScript
 
 		// also clear any previously saved settings
 		activationSettings = null;
+		isPageBlocked = false;
 		settings = null;
 
 		if (DEBUG) { log("content script deactivated"); }
@@ -606,7 +609,7 @@ namespace ContentScript
 		const message = new EngineClickMessage();
 		// Due to shortcuts, we can search without a popup, so we only get the input field contents if popup is not null.
 		message.selection = popup !== null && settings.showSelectionTextField === true ? popup.getInputFieldText() : selection.text;
-		message.engine = engine;
+		message.engineId = engine?.uniqueId;
 
 		if (window.location) {
 			message.href = window.location.href;
@@ -682,6 +685,13 @@ namespace PopupCreator
 {
 	export let onSearchEngineClick = null;
 	const VIEWPORT_MARGIN = 5;
+	const GENERIC_ENGINE_ICON_PATH = "res/sss-engine-icons/generic-engine.svg";
+
+	// Icon sources that can be displayed without any network request.
+	function isLocalIconSource(source: string): boolean
+	{
+		return typeof source === "string" && (source.startsWith("data:image/") || source.startsWith(browser.runtime.getURL("")));
+	}
 
 	// Chrome does not expose a custom-element registry in its isolated content world.
 	// Return a real DOM host from super(), then add our methods to that element.
@@ -1000,16 +1010,15 @@ namespace PopupCreator
 				else
 				{
 					const userEngine = engine as SSS.SearchEngine_NonSSS;
-					let iconImgSource: string;
-
-					if (userEngine.iconUrl.startsWith("data:")) {
-						iconImgSource = userEngine.iconUrl;	// use "URL" directly, as it's pure image data
-					} else {
-						const cachedIcon = settings.searchEnginesCache[userEngine.iconUrl];
-						iconImgSource = cachedIcon ? cachedIcon : userEngine.iconUrl;	// should have cached icon, but if not (for some reason) fall back to URL
-					}
+					const iconUrl = userEngine.iconUrl || "";
+					// Never load a remote URL here: this element lives in the visited page, so the
+					// request would tell the icon host which site the user is on. Without a local
+					// copy (data: image or extension resource), show a bundled generic icon.
+					const candidates = [iconUrl, settings.searchEnginesCache[iconUrl]];
+					const iconImgSource = candidates.find(isLocalIconSource) || browser.runtime.getURL(GENERIC_ENGINE_ICON_PATH);
 
 					icon = this.setupEngineIcon(userEngine, iconImgSource, userEngine.name, true, settings);
+					if (iconImgSource.endsWith(GENERIC_ENGINE_ICON_PATH)) icon.classList.add("sss-action-icon");
 				}
 
 				this.enginesContainer.appendChild(icon);

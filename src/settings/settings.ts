@@ -207,53 +207,82 @@ namespace SSS_Settings
 		}
 	}
 
-	// Hackish way to get the image data (base64 data:image) from the URL of an image.
-	// Sets the URL as img source, waits for download, then scales it down if needed, draws to a canvas and gets the resulting pixel data.
-	function getDataUriFromImgUrl(imageUrl, callback)
+	// Gets the image data (base64 data:image) from the URL of an image, so that web pages never load remote icons.
+	// Downloads the image, scales it down if needed, draws it to a canvas and gets the resulting pixel data.
+	// The extension page's host permission lets fetch() read hosts that send no CORS headers, which an
+	// <img crossOrigin> load could not cache; the request carries no cookies and no referrer.
+	async function getDataUriFromImgUrl(imageUrl: string, callback: (dataUri: string) => void): Promise<void>
 	{
-		var img = new Image();
-		img.crossOrigin = "Anonymous";
-		img.onload = _ => {
-			const maxSize = 192;
-			let width;
-			let height;
-			let xPos = 0;
-			let yPos = 0;
-
-			// Scale image to smaller icon if needed (always keep aspect ratio).
-			// We don't want stored SSS icons to take a lot of space.
-			if (img.width > img.height) {
-				width = Math.min(maxSize, img.width);
-				height = width * img.height / img.width;
-				yPos = (width - height) / 2;
-			} else if (img.height > img.width) {
-				height = Math.min(maxSize, img.height);
-				width = height * img.width / img.height;
-				xPos = (height - width) / 2;
-			} else {
-				width = Math.min(maxSize, img.width);
-				height = width;
+		let objectUrl: string = null;
+		const abort = new AbortController();
+		const timeout = setTimeout(() => abort.abort(), 10000);
+		try {
+			const response = await fetch(imageUrl, {
+				credentials: "omit", referrerPolicy: "no-referrer", cache: "force-cache", signal: abort.signal
+			});
+			if (!response.ok) throw new Error("HTTP " + response.status);
+			const blob = await response.blob();
+			// Some servers send icons without a type or as octet-stream; decoding below is the real check.
+			if (blob.type && !blob.type.startsWith("image/") && blob.type !== "application/octet-stream") {
+				throw new Error("Not an image: " + blob.type);
 			}
+			objectUrl = URL.createObjectURL(blob);
+			const img = new Image();
+			await new Promise((resolve, reject) => {
+				img.onload = resolve;
+				img.onerror = () => reject(new Error("Image decoding failed"));
+				img.src = objectUrl;
+			});
+			callback(drawIconToDataUri(img));
+		} catch (error) {
+			console.warn("SSS: Could not cache engine icon " + imageUrl, error);
+		} finally {
+			clearTimeout(timeout);
+			if (objectUrl) URL.revokeObjectURL(objectUrl);
+		}
+	}
 
-			if (DEBUG) { log(img.width + "x" + img.height + " became " + width + "x" + height); }
+	function drawIconToDataUri(img: HTMLImageElement): string
+	{
+		// e.g. an SVG without intrinsic size; caching it would store an empty "data:," image
+		if (img.width <= 0 || img.height <= 0) throw new Error("Invalid image size " + img.width + "x" + img.height);
 
-			// canvas is always a square (using larger dimension)
-			const canvas = document.createElement("canvas");
-			canvas.width = canvas.height = Math.max(width, height);
+		const maxSize = 192;
+		let width;
+		let height;
+		let xPos = 0;
+		let yPos = 0;
 
-			// draw image with size and position defined above
-			const ctx = canvas.getContext("2d");
-			ctx.drawImage(img, xPos, yPos, width, height);
+		// Scale image to smaller icon if needed (always keep aspect ratio).
+		// We don't want stored SSS icons to take a lot of space.
+		if (img.width > img.height) {
+			width = Math.min(maxSize, img.width);
+			height = width * img.height / img.width;
+			yPos = (width - height) / 2;
+		} else if (img.height > img.width) {
+			height = Math.min(maxSize, img.height);
+			width = height * img.width / img.height;
+			xPos = (height - width) / 2;
+		} else {
+			width = Math.min(maxSize, img.width);
+			height = width;
+		}
 
-			// finally get the image data (base64 data:image)
-			const dataURL = canvas.toDataURL();
-			if (DEBUG) { log(dataURL.length); }
-			if (DEBUG) { log(imageUrl); }
-			if (DEBUG) { log(dataURL); }
-			callback(dataURL);
-		};
+		if (DEBUG) { log(img.width + "x" + img.height + " became " + width + "x" + height); }
 
-		img.src = imageUrl;	// starts the download and will call onload eventually
+		// canvas is always a square (using larger dimension)
+		const canvas = document.createElement("canvas");
+		canvas.width = canvas.height = Math.max(width, height);
+
+		// draw image with size and position defined above
+		const ctx = canvas.getContext("2d");
+		if (!ctx) throw new Error("Canvas 2D context is unavailable");
+		ctx.drawImage(img, xPos, yPos, width, height);
+
+		// finally get the image data (base64 data:image)
+		const dataURL = canvas.toDataURL();
+		if (DEBUG) { log(dataURL.length); }
+		return dataURL;
 	}
 
 	function onDOMContentLoaded()

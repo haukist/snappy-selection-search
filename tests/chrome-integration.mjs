@@ -92,7 +92,7 @@ try {
   record('options sync descriptions refer to browser sync instead of Firefox Sync');
   const search = async (engine, selection = 'Chrome search 日本語', openingBehaviour = 'new-bg-tab') => {
     const count = requests.length;
-    await send('engineClick', { engine, selection, href: origin, openingBehaviour });
+    await send('engineClick', { engineId: engine.uniqueId, selection, href: origin, openingBehaviour });
     await options.waitForTimeout(200);
     assert(requests.slice(count).some(url => url.startsWith('/search?q=')), `Expected local search; requests: ${requests.slice(count)}`);
   };
@@ -174,11 +174,16 @@ try {
   assert.equal(await input.inputValue(), 'Chrome offscreen copy');
   record('offscreen clipboard requests serialize and paste the copied text');
   await select(existing);
-  await send('engineClick', { engine: { type: 'sss', id: 'copyToClipboard', isPlainText: true }, selection: 'Chrome', href: existing.url() });
+  // The background only runs engines from its own settings, so store the copy action first.
+  const copyEngine = { type: 'sss', uniqueId: 'copy', id: 'copyToClipboard', isPlainText: true, isEnabled: true, isEnabledInContextMenu: false };
+  await options.evaluate(engines => browser.storage.local.set({ searchEngines: engines }), [...settings.searchEngines, copyEngine]);
+  await options.waitForFunction(async () => (await browser.runtime.sendMessage({ type: 'getPopupSettings' })).settings.searchEngines.some(engine => engine.uniqueId === 'copy'));
+  await send('engineClick', { engineId: 'copy', selection: 'Chrome', href: existing.url(), openingBehaviour: 'this-tab' });
   await input.click();
   await existing.keyboard.press('Control+a');
   await existing.keyboard.press('Control+v');
   assert.equal((await input.inputValue()).trim(), 'Chrome');
+  await options.evaluate(engines => browser.storage.local.set({ searchEngines: engines }), settings.searchEngines);
   record('content-script plain-text copy preserves actual selected text');
   await existing.goto(origin + '/plain');
   await existing.bringToFront();
@@ -213,6 +218,37 @@ try {
     await search(settings.searchEngines[0], 'opening', openingBehaviour);
   }
   record('all seven result-opening modes create or update real tabs/windows');
+  // Website blocklist: a same-document (SPA) navigation onto a blocked path disables both the popup and
+  // the always-on engine shortcuts; navigating back re-enables them.
+  const setAndWait = async changes => {
+    await options.evaluate(changes => browser.storage.local.set(changes), changes);
+    await options.waitForFunction(async changes => {
+      const { settings } = await browser.runtime.sendMessage({ type: 'getPopupSettings' });
+      return Object.entries(changes).every(([key, value]) => settings[key] === value);
+    }, changes);
+    await options.waitForTimeout(200);
+  };
+  await existing.goto(origin + '/plain');
+  await existing.bringToFront();
+  await select(existing);
+  await setAndWait({ websiteBlocklist: `${new URL(origin).host}/spa-blocked*`, useEngineShortcutWithoutPopup: true });
+  await existing.evaluate(() => history.pushState({}, '', '/spa-blocked/page'));
+  await options.waitForTimeout(300);
+  await existing.locator('#selection').dblclick({ position: { x: 25, y: 8 } });
+  baseline = requests.length;
+  await existing.keyboard.press('g');
+  await options.waitForTimeout(300);
+  assert.equal(requests.length, baseline, 'blocked page must not run engine shortcuts');
+  assert.equal(await existing.evaluate(() => getSelection().toString().length > 0), true);
+  assert.equal(await options.evaluate(async tabId => (await chrome.scripting.executeScript({ target: { tabId }, func: () => {
+    const popup = document.querySelector('sss-popup');
+    return !!popup && popup.isShown();
+  } }))[0].result, fixtureTab), false, 'blocked page must not show the popup');
+  await existing.evaluate(() => history.pushState({}, '', '/plain'));
+  await options.waitForTimeout(300);
+  await select(existing);
+  record('website blocklist wildcards apply after SPA navigation and also block engine shortcuts');
+  await setAndWait({ websiteBlocklist: '', useEngineShortcutWithoutPopup: settings.useEngineShortcutWithoutPopup });
   const layoutSettings = structuredClone(data.defaultSettings);
   layoutSettings.popupDelay = 0;
   layoutSettings.popupAnimationDuration = 0;

@@ -266,7 +266,15 @@ namespace SSS
 		}
 	};
 
-	let uniqueIdToEngineDictionary: { [uniqueId: number] : SearchEngine; } = {};
+	const GENERIC_ENGINE_ICON_PATH = "res/sss-engine-icons/generic-engine.svg";
+
+	// Icon sources that can be displayed without any network request.
+	function isLocalIconSource(source: string): boolean
+	{
+		return typeof source === "string" && (source.startsWith("data:image/") || source.startsWith(browser.runtime.getURL("")));
+	}
+
+	let uniqueIdToEngineDictionary: { [uniqueId: string] : SearchEngine; } = {};
 
 	// Default state of all configurable options.
 	// Verified source URLs; bundled originals keep default icons sharp without network requests.
@@ -480,9 +488,14 @@ namespace SSS
 	// Register wake-up listeners synchronously, before loading any settings.
 	let ready: Promise<void>;
 	const afterReady = (action: () => any) => waitForReady().then(action).catch(getErrorHandler("Background operation failed."));
+	// Messages that content scripts (running inside web pages) may send.
+	const contentScriptMessages = ["getPopupSettings", "engineClick", "log"];
+	// Messages only extension pages (the options page) may send.
+	const extensionPageMessages = ["getDataForSettingsPage", "runBackwardsCompatibilityUpdates", "generateUniqueEngineId"];
 	browser.runtime.onMessage.addListener((msg, sender, respond) => {
-		if (!msg || msg.target === "offscreen") return;
-		if (["getPopupSettings", "engineClick", "log", "getDataForSettingsPage", "runBackwardsCompatibilityUpdates", "generateUniqueEngineId"].indexOf(msg.type) < 0) return;
+		if (!msg || msg.target === "offscreen" || !sender || sender.id !== browser.runtime.id) return;
+		const isFromExtensionPage = typeof sender.url === "string" && sender.url.startsWith(browser.runtime.getURL(""));
+		if (contentScriptMessages.indexOf(msg.type) < 0 && !(isFromExtensionPage && extensionPageMessages.indexOf(msg.type) >= 0)) return;
 		waitForReady().then(() => onContentScriptMessage(msg, sender, respond)).catch(error => {
 			console.warn("Message failed", error);
 			respond({ error: String(error) });
@@ -497,6 +510,10 @@ namespace SSS
 	browser.webNavigation.onDOMContentLoaded.addListener(details => afterReady(() => {
 		if (sss.settings.popupOpenBehaviour !== PopupOpenBehaviour.Off || sss.settings.useEngineShortcutWithoutPopup) return onDOMContentLoaded(details);
 	}));
+	// Single-page apps change the URL without loading a new document, so re-check the blocklist.
+	const onSameDocumentNavigation = details => afterReady(() => onUrlChangedWithoutLoad(details));
+	browser.webNavigation.onHistoryStateUpdated.addListener(onSameDocumentNavigation);
+	browser.webNavigation.onReferenceFragmentUpdated.addListener(onSameDocumentNavigation);
 	browser.runtime.onStartup.addListener(() => afterReady(() => setup_Popup()));
 	ready = initializeBackground();
 	ready.catch(getErrorHandler("Error loading settings."));
@@ -620,7 +637,7 @@ namespace SSS
 			else if (website.includes("*"))
 			{
 				regexStr = escapeRegexString(website);
-				regexStr = "^" + regexStr.replace("\\*", "(.*?)");	// ^ matches start of string, * are replaced by a non greedy match for "any characters"
+				regexStr = "^" + regexStr.split("\\*").join("(.*?)");	// ^ matches start of string, every * is replaced by a non greedy match for "any characters"
 			}
 			else
 			{
@@ -815,7 +832,15 @@ namespace SSS
 		}, getErrorHandler("Error querying tabs."));
 	}
 
-	function activateTab(tab: browser.tabs.Tab, frameId?: number)
+	function onUrlChangedWithoutLoad(details: { tabId: number, frameId: number, url: string })
+	{
+		// Blocking depends only on the top-level URL, and only matters if something is blocked at all.
+		if (details.frameId !== 0 || details.tabId < 0 || sss.blockedWebsitesCache.length === 0) return;
+		if (sss.settings.popupOpenBehaviour === PopupOpenBehaviour.Off && !sss.settings.useEngineShortcutWithoutPopup) return;
+		activateTab({ id: details.tabId, url: details.url });	// all frames of the tab
+	}
+
+	function activateTab(tab: Pick<browser.tabs.Tab, "id" | "url">, frameId?: number)
 	{
 		browser.tabs.sendMessage(tab.id, {
 			type: "activate",
@@ -824,7 +849,7 @@ namespace SSS
 		}, frameId === undefined ? {} : { frameId }).then(() => {}, () => {});	// suppress errors
 	}
 
-	function isPageBlocked(tab: browser.tabs.Tab): boolean
+	function isPageBlocked(tab: Pick<browser.tabs.Tab, "url">): boolean
 	{
 		if (sss.blockedWebsitesCache === undefined) return false;	// can happen when reloading extension in about:debugging
 		if (sss.blockedWebsitesCache.length == 0) return false;
@@ -881,10 +906,17 @@ namespace SSS
 				callbackFunc(sss.settingsForContentScript);
 				break;
 
-			case "engineClick":
-				await onSearchEngineClick(msg.engine, msg.openingBehaviour, msg.selection, msg.href, null);
+			case "engineClick": {
+				// Content scripts run inside web pages, so never trust engine data from them: only accept the ID
+				// of an enabled engine from our own settings, and a known opening behaviour.
+				const engine = typeof msg.engineId === "string" && Object.prototype.hasOwnProperty.call(uniqueIdToEngineDictionary, msg.engineId)
+					? uniqueIdToEngineDictionary[msg.engineId] : undefined;
+				if (engine && engine.isEnabled && isOpenResultBehaviour(msg.openingBehaviour) && isValidUrl(msg.href)) {
+					await onSearchEngineClick(engine, msg.openingBehaviour, msg.selection, msg.href, null);
+				}
 				callbackFunc({ ok: true });
 				break;
+			}
 
 			case "log":
 				if (DEBUG) { log("[content script log]", msg.log); }
@@ -914,6 +946,29 @@ namespace SSS
 				break;
 
 			default: break;
+		}
+	}
+
+	// "const enum" values have no runtime object to enumerate, so list them once here.
+	const openResultBehaviours: string[] = [
+		OpenResultBehaviour.ThisTab, OpenResultBehaviour.NewTab, OpenResultBehaviour.NewBgTab,
+		OpenResultBehaviour.NewTabNextToThis, OpenResultBehaviour.NewBgTabNextToThis,
+		OpenResultBehaviour.NewWindow, OpenResultBehaviour.NewBgWindow,
+	];
+
+	function isOpenResultBehaviour(value: any): value is OpenResultBehaviour
+	{
+		return openResultBehaviours.indexOf(value) >= 0;
+	}
+
+	function isValidUrl(value: any): value is string
+	{
+		if (typeof value !== "string") return false;
+		try {
+			new URL(value);
+			return true;
+		} catch {
+			return false;
 		}
 	}
 
@@ -995,16 +1050,9 @@ namespace SSS
 				icon = sssIcons[concreteEngine.id].iconPath;
 			}
 			else {
-				const iconUrl: string = (engine as SearchEngine_NonSSS).iconUrl;
-
-				if (iconUrl.startsWith("data:")) {
-					icon = iconUrl;
-				} else {
-					icon = sss.settings.searchEnginesCache[iconUrl];
-					if (icon === undefined) {
-						icon = iconUrl;
-					}
-				}
+				// Only use local sources (data: images or extension resources), never fetch a remote icon.
+				const iconUrl: string = (engine as SearchEngine_NonSSS).iconUrl || "";
+				icon = [iconUrl, sss.settings.searchEnginesCache[iconUrl]].find(isLocalIconSource) || GENERIC_ENGINE_ICON_PATH;
 			}
 
 			contextMenuOption.icons = { "32": icon };
